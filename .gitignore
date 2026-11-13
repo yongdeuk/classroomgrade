@@ -1,0 +1,8 @@
+# 개인 설정·도구
+.clasp.json
+node_modules/
+.DS_Store
+*.log
+# 채점 데이터·키는 저장소에 넣지 않습니다
+*.key
+.env

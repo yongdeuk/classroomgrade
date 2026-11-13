@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<title>수행평가 자동채점</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6ea; --text: #1f2328; --muted: #667085;
+    --brand: #1a73e8; --brand-weak: #e8f0fe; --ok: #188038; --ok-weak: #e6f4ea;
+    --bad: #c5221f; --bad-weak: #fce8e6; --warn: #b06000; --warn-weak: #fef7e0;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: 'Noto Sans KR', system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 12px; }
+  button:hover { background: #f1f3f4; }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  button.primary:hover { background: #1765cc; }
+  button.ghost { border-color: transparent; background: transparent; }
+  button:disabled { opacity: .5; cursor: default; }
+  select, input[type=text], input[type=number], textarea { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: #fff; }
+  textarea { width: 100%; resize: vertical; }
+
+  /* ---------- 상단 ---------- */
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; white-space: nowrap; }
+  header select { max-width: 200px; }
+  header button { padding: 6px 10px; white-space: nowrap; }
+  .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f1f3f4; color: var(--muted); white-space: nowrap; }
+  .badge.ok { background: var(--ok-weak); color: var(--ok); }
+  .badge.bad { background: var(--bad-weak); color: var(--bad); }
+  .badge.warn { background: var(--warn-weak); color: var(--warn); }
+  .badge.blue { background: var(--brand-weak); color: var(--brand); }
+  .spacer { flex: 1; }
+  .menu { position: relative; }
+  .menu-list { display: none; position: absolute; right: 0; top: 38px; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.08); min-width: 220px; z-index: 10; }
+  .menu-list.open { display: block; }
+  .menu-list button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; padding: 10px 14px; }
+
+  .acct { font-size: 12px; color: var(--muted); white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+  .acct a { color: var(--brand); margin-left: 6px; text-decoration: none; }
+  .gate { max-width: 460px; margin: 14vh auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; text-align: center; line-height: 1.8; }
+  .gate h2 { margin: 0 0 8px; }
+  .progress { height: 4px; background: transparent; }
+  .progress > div { height: 100%; width: 0; background: var(--brand); transition: width .3s; }
+
+  /* ---------- 본문 ---------- */
+  main { display: grid; grid-template-columns: 300px minmax(0, 1fr) minmax(380px, 34%); gap: 0; height: calc(100vh - 62px); }
+  .doc { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: #eef0f3; }
+  .doc .bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .doc .bar .tab { font-size: 13px; padding: 4px 10px; }
+  .doc .bar .tab.on { background: var(--brand-weak); border-color: var(--brand); color: var(--brand); }
+  .doc iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+  .doc .empty { margin-top: 30vh; }
+  .left { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .left .tools { padding: 10px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+  .left .tools input { width: 100%; min-width: 0; }
+  .stats { display: flex; gap: 6px; flex-wrap: wrap; }
+  .list { overflow: auto; flex: 1; }
+  .stu { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .stu:hover { background: #f8f9fa; }
+  .stu.sel { background: var(--brand-weak); }
+  .stu .pick, #selAll { width: 17px; height: 17px; cursor: pointer; margin: 0; }
+  .bulk { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .bulk label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; }
+  .bulkact { display: none; gap: 6px; flex-wrap: wrap; }
+  .bulkact.on { display: flex; }
+  .bulkact button { padding: 5px 9px; font-size: 12.5px; }
+  .stu .sid { color: var(--muted); font-size: 12px; margin-right: 6px; }
+  .stu .nm { font-weight: 500; }
+  .stu .sub { font-size: 12px; color: var(--muted); display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+  .stu .sc { font-size: 18px; font-weight: 700; min-width: 44px; text-align: center; }
+  .stu.review .nm { color: var(--bad); }
+
+  .right { overflow: auto; padding: 14px 14px 40px; min-height: 0; }
+  .banner .msg { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+  .empty { color: var(--muted); text-align: center; margin-top: 18vh; line-height: 1.8; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+  .head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .head .who { font-size: 17px; font-weight: 700; }
+  .head .sidin { width: 90px; text-align: center; }
+  .total { font-size: 34px; font-weight: 800; color: var(--brand); line-height: 1; }
+  .total small { font-size: 15px; color: var(--muted); font-weight: 500; }
+  .ded { margin-top: 10px; color: var(--bad); font-weight: 500; line-height: 1.7; }
+  .ded .chip { display: inline-block; background: var(--bad-weak); border-radius: 6px; padding: 1px 8px; margin: 2px 4px 2px 0; font-size: 13px; }
+  .nodeds { color: var(--ok); font-weight: 500; margin-top: 10px; }
+  .banner { border-radius: 8px; padding: 10px 12px; margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .banner.bad { background: var(--bad-weak); color: var(--bad); }
+  .banner.warn { background: var(--warn-weak); color: var(--warn); }
+  .item h3 { margin: 0 0 8px; font-size: 15px; display: flex; justify-content: space-between; gap: 10px; }
+  .item h3 .s { color: var(--brand); white-space: nowrap; }
+  .check { display: grid; grid-template-columns: 24px 1fr; gap: 6px; padding: 7px 0; border-top: 1px dashed var(--line); align-items: start; }
+  .check:first-of-type { border-top: 0; }
+  .check input { width: 18px; height: 18px; margin-top: 2px; cursor: pointer; }
+  .check .t { font-weight: 500; }
+  .check .t .pt { color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .check.miss .t { color: var(--bad); }
+  .check .why { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .check .why.edited::after { content: ' · 선생님 수정'; color: var(--brand); }
+  .rat { font-size: 12.5px; color: var(--muted); margin-top: 8px; background: #f8f9fa; border-radius: 6px; padding: 6px 8px; }
+  .imgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .imgs figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; cursor: zoom-in; }
+  .imgs img { width: 100%; display: block; }
+  .imgs figcaption { font-size: 12px; color: var(--muted); padding: 4px 8px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12.5px; }
+
+  /* ---------- 창 ---------- */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-start; justify-content: center; z-index: 20; overflow: auto; padding: 30px 12px; }
+  .modal.open { display: flex; }
+  .dlg { background: #fff; border-radius: 12px; width: min(920px, 100%); padding: 18px 20px; }
+  .dlg h2 { margin: 0 0 12px; font-size: 17px; display: flex; justify-content: space-between; }
+  .sec { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .sec h4 { margin: 0 0 8px; font-size: 14px; }
+  .sec h4 .opt { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .st { font-size: 12.5px; color: var(--muted); margin-top: 6px; white-space: pre-line; }
+  .st.ok { color: var(--ok); } .st.bad { color: var(--bad); }
+  table.ed { width: 100%; border-collapse: collapse; }
+  table.ed td, table.ed th { border-bottom: 1px solid var(--line); padding: 5px; vertical-align: top; text-align: left; font-size: 13px; }
+  table.ed input[type=text] { width: 100%; }
+  table.ed input[type=number] { width: 70px; }
+  .sum.bad { color: var(--bad); font-weight: 700; }
+  .zoom { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none; align-items: center; justify-content: center; z-index: 30; cursor: zoom-out; }
+  .zoom.open { display: flex; }
+  .zoom img { max-width: 95vw; max-height: 92vh; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #202124; color: #fff; padding: 10px 16px; border-radius: 8px; display: none; z-index: 40; max-width: 90vw; }
+  .toast.open { display: block; }
+
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 260px minmax(0, 1fr); height: auto; }
+    .doc { height: calc(100vh - 62px); }
+    .right { grid-column: 1 / -1; }
+  }
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    .left { max-height: 40vh; }
+    .doc { height: 70vh; }
+    header select { max-width: 100%; flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📝 수행평가 자동채점</h1>
+  <select id="course"><option>불러오는 중…</option></select>
+  <select id="work" disabled><option>수업을 먼저 고르세요</option></select>
+  <span id="workInfo" style="display:flex;gap:4px;flex-wrap:nowrap"></span>
+  <span class="spacer"></span>
+  <button id="btnRubric" disabled>📋 루브릭·자료</button>
+  <button id="btnGrade" class="primary" disabled>▶ 채점 시작</button>
+  <button id="btnStop" style="display:none">■ 멈춤</button>
+  <button id="btnPush" disabled>⬆ 클래스룸 반영</button>
+  <div class="menu">
+    <button id="btnMore">⋯</button>
+    <div class="menu-list" id="moreList">
+      <button data-act="regradeAll">전체 다시 채점</button>
+      <button data-act="test">🧪 테스트 채점(저장 안 함)</button>
+      <button data-act="export">📄 시트로 내보내기</button>
+      <button data-act="comments">💬 피드백을 학생 문서에 댓글로</button>
+      <button data-act="create">➕ 활동지 사본 배포 과제 만들기</button>
+      <button data-act="settings">⚙ 설정</button>
+    </div>
+  </div>
+  <span class="acct" id="acct" title="로그인한 구글 계정"></span>
+</header>
+<div class="progress"><div id="bar"></div></div>
+
+<main>
+  <section class="left">
+    <div class="tools">
+      <input type="text" id="search" placeholder="학번·이름 검색">
+      <div class="stats" id="stats"></div>
+      <div class="bulk"><label><input type="checkbox" id="selAll"> 전체 선택</label><span class="small muted" id="selCount"></span></div>
+      <div class="bulkact" id="bulkAct"><button id="bRegrade">↻ 선택 학생 다시 채점</button><button id="bPush">⬆ 선택 학생 반영</button></div>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+  <section class="doc" id="docPane">
+    <div class="empty">학생을 고르면 제출한 파일이 여기에 나옵니다.</div>
+  </section>
+  <section class="right" id="detail">
+    <div class="empty">수업과 과제를 고르면 학생 목록이 나옵니다.<br>처음이면 <b>📋 루브릭·자료</b>에서 루브릭을 올린 뒤 <b>▶ 채점 시작</b>을 누르세요.</div>
+  </section>
+</main>
+
+<!-- 루브릭·자료 -->
+<div class="modal" id="mRubric"><div class="dlg">
+  <h2>📋 루브릭·자료 <button class="ghost" data-close>✕</button></h2>
+  <div class="sec">
+    <h4>1. 평가 루브릭 <span class="opt">필수 · PDF·Word·한글(hwpx)·엑셀·사진·텍스트 또는 Google 문서 링크</span></h4>
+    <input type="file" id="rf" accept=".pdf,.docx,.doc,.hwpx,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png">
+    <textarea id="rt" rows="2" placeholder="또는 Google 문서 링크나 루브릭 내용을 붙여 넣기"></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="primary" id="rUp">루브릭 불러오기</button></div>
+    <div class="st" id="rSt"></div>
+  </div>
+  <div class="sec">
+    <h4>2. 빈 활동지 <span class="opt">선택 · 클래스룸 과제에 배포한 원본을 자동으로 가져옴</span></h4>
+    <div class="st" id="wSt"></div>
+    <input type="file" id="wf" accept=".pdf,.docx,.doc,.hwpx,.txt,.jpg,.jpeg,.png">
+    <textarea id="wt" rows="1" placeholder="다른 원본을 쓸 때만: Google 문서 링크나 내용"></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="wReload">클래스룸에서 다시 가져오기</button><button class="primary" id="wUp">저장</button></div>
+  </div>
+  <div class="sec">
+    <h4>3. 예시답안 <span class="opt">선택 · 글과 그래프·코드 이미지를 채점 기준으로 사용 (이미지가 있으면 Google 문서 링크나 Word)</span></h4>
+    <div class="st" id="eSt"></div>
+    <input type="file" id="ef" accept=".pdf,.docx,.doc,.hwpx,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png">
+    <textarea id="et" rows="1" placeholder="또는 Google 문서 링크나 예시답안 내용"></textarea>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="eClear">지우기</button><button class="primary" id="eUp">저장</button></div>
+  </div>
+  <div class="sec">
+    <h4>과제 설명 <span class="opt">선택 · AI에게 맥락으로 전달 (예: 중2 정보 - 정렬 알고리즘 탐구)</span></h4>
+    <div class="row"><input type="text" id="ctx" style="flex:1"><button id="ctxSave">저장</button></div>
+  </div>
+  <div class="sec">
+    <h4>루브릭과 세부항목(체크리스트) <span class="opt">세부항목 점수 합 = 항목 배점 · 점수 단위 <b id="unitTxt">-</b></span></h4>
+    <div id="rubricEd" class="small muted">루브릭을 불러오면 여기에서 확인·수정할 수 있습니다.</div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">
+      <button id="ckRegen">세부항목 AI로 다시 만들기</button>
+      <button class="primary" id="rbSave">수정 내용 저장</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- 설정 -->
+<div class="modal" id="mSettings"><div class="dlg" style="width:min(560px,100%)">
+  <h2>⚙ 설정 <button class="ghost" data-close>✕</button></h2>
+  <div id="setForm" style="display:grid;gap:10px"></div>
+  <p class="small muted">API 키는 Apps Script 편집기 ⚙ 프로젝트 설정 › 스크립트 속성에 <code>BAZE_API_KEY</code>로 저장합니다.</p>
+  <div class="row" style="justify-content:flex-end"><button class="primary" id="setSave">저장</button></div>
+</div></div>
+
+<!-- 테스트 -->
+<div class="modal" id="mTest"><div class="dlg">
+  <h2>🧪 테스트 채점 <span class="small muted">저장하지 않음</span> <button class="ghost" data-close>✕</button></h2>
+  <input type="text" id="tLink" placeholder="활동지 사본(Google 문서) 링크 — 그래프·코드 이미지까지 시험할 때" style="width:100%;margin-bottom:8px">
+  <textarea id="tText" rows="6" placeholder="또는 답안을 직접 입력"></textarea>
+  <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="primary" id="tRun">채점해 보기</button></div>
+  <div id="tOut" style="margin-top:12px"></div>
+</div></div>
+
+<!-- 사본 배포 과제 -->
+<div class="modal" id="mCreate"><div class="dlg" style="width:min(560px,100%)">
+  <h2>➕ 활동지 사본 배포 과제 만들기 <button class="ghost" data-close>✕</button></h2>
+  <p class="small muted">이 앱으로 만든 과제만 점수를 클래스룸에 자동으로 넣을 수 있습니다(구글 정책). 초안으로 만들어지니 클래스룸에서 기한을 정해 게시하세요.</p>
+  <div style="display:grid;gap:8px">
+    <label>활동지 (최근 수정한 내 Google 문서)<select id="cDoc" style="width:100%"></select></label>
+    <label>과제 제목<input type="text" id="cTitle" style="width:100%" placeholder="예) 2학기 정보 수행평가 - 정렬 알고리즘"></label>
+    <label>만점<input type="number" id="cMax" value="100"></label>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="primary" id="cGo">초안 과제 만들기</button></div>
+  <div class="st" id="cSt"></div>
+</div></div>
+
+<div class="zoom" id="zoom"><img id="zoomImg" alt=""></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 공통 ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// 서버 호출: 응답이 너무 오래 없으면(6분) 멈춘 채로 두지 않고 오류로 알림
+const SLOW = { app_gradeOne: 1, app_uploadRubric: 1, app_regenChecklist: 1, app_test: 1, app_export: 1, app_uploadExample: 1 };
+const run = (fn, ...args) => new Promise((res, rej) => {
+  let done = false;
+  const limit = SLOW[fn] ? 360000 : 120000;
+  const t = setTimeout(() => { if (!done) { done = true; rej(new Error(`${fn} 응답이 ${limit / 60000}분 넘게 없습니다. Apps Script 편집기 › 실행(왼쪽 ▶ 목록)에서 오류를 확인해 주세요.`)); } }, limit);
+  google.script.run
+    .withSuccessHandler(v => { if (done) return; done = true; clearTimeout(t); res(v); })
+    .withFailureHandler(e => { if (done) return; done = true; clearTimeout(t); rej(e); })[fn](...args);
+});
+let toastTimer;
+function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('open'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('open'), ms || 3500); }
+function fail(e) { toast('오류: ' + (e && e.message || e), 7000); }
+function openModal(id) { $(id).classList.add('open'); }
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.modal').classList.remove('open'));
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+$('zoom').onclick = () => $('zoom').classList.remove('open');
+function readFile(input) {
+  return new Promise((resolve, reject) => {
+    const f = input.files[0];
+    if (!f) return resolve(null);
+    if (f.size > 20 * 1024 * 1024) return reject(new Error('파일이 20MB보다 큽니다.'));
+    const r = new FileReader();
+    r.onload = () => resolve({ name: f.name, mime: f.type, data: String(r.result).split(',')[1] });
+    r.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
+    r.readAsDataURL(f);
+  });
+}
+function setSt(id, msg, cls) { const el = $(id); el.className = 'st ' + (cls || ''); el.textContent = msg; }
+
+/* ---------- 상태 ---------- */
+const S = { checked: new Set(), courseId: '', workId: '', work: null, project: null, students: {}, order: [], sel: '', works: [], stop: false, running: false, settings: {} };
+
+/* ---------- 시작 ---------- */
+let initDone = false;
+setTimeout(() => {
+  if (!initDone) toast('수업 목록이 오지 않고 있습니다. 브라우저에 구글 계정이 여러 개 로그인되어 있으면 이런 일이 생깁니다. 시크릿 창에서 학교 계정으로만 로그인해 열어 보세요.', 20000);
+}, 20000);
+function chooser(url) { return 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(url || location.href); }
+function showAcct(d) {
+  if (d.user) $('acct').innerHTML = `🔒 ${esc(d.user)}<a href="${esc(chooser(d.url))}" title="다른 구글 계정으로 로그인">계정 전환</a>`;
+}
+function showGate(title, msg, d) {
+  document.querySelector('main').innerHTML = `<div class="gate" style="grid-column:1/-1"><h2>${esc(title)}</h2><div>${esc(msg)}</div>
+    <p><a href="${esc(chooser(d && d.url))}"><button class="primary">다른 구글 계정으로 로그인</button></a></p></div>`;
+  ['course', 'work', 'btnRubric', 'btnGrade', 'btnPush', 'btnMore'].forEach(id => { if ($(id)) $(id).disabled = true; });
+}
+run('app_init').then(d => {
+  initDone = true;
+  showAcct(d);
+  if (d.blocked) return showGate('사용 권한이 없습니다', d.blocked, d);
+  if (d.isTeacher === false) return showGate('교사 계정으로 로그인해 주세요', `${d.user} 계정에는 선생님으로 등록된 클래스룸 수업이 없습니다.`, d);
+  S.settings = d.settings;
+  $('course').innerHTML = '<option value="">— 수업 선택 —</option>' + d.courses.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  if (!d.hasKey) toast('API 키가 없습니다. Apps Script › 프로젝트 설정 › 스크립트 속성에 BAZE_API_KEY를 넣어 주세요.', 9000);
+  if (d.last && d.last.courseId && d.courses.some(c => c.id === d.last.courseId)) {
+    $('course').value = d.last.courseId; loadWorks(d.last.workId);
+  }
+}).catch(e => { initDone = true; $('course').innerHTML = '<option>불러오지 못함 — 새로고침</option>'; fail(e); });
+
+$('course').onchange = () => loadWorks();
+$('work').onchange = () => openWork();
+
+function loadWorks(selectId) {
+  S.courseId = $('course').value; S.workId = ''; resetView();
+  if (!S.courseId) return;
+  $('work').disabled = true; $('work').innerHTML = '<option>불러오는 중…</option>';
+  run('app_works', S.courseId).then(ws => {
+    S.works = ws;
+    $('work').innerHTML = '<option value="">— 과제 선택 —</option>' + ws.map(w =>
+      `<option value="${esc(w.id)}">${w.state === 'DRAFT' ? '[초안] ' : ''}${w.api ? '⭐ ' : ''}${esc(w.title)}</option>`).join('');
+    $('work').disabled = false;
+    if (selectId && ws.some(w => w.id === selectId)) { $('work').value = selectId; openWork(); }
+  }).catch(fail);
+}
+
+function resetView() {
+  S.students = {}; S.order = []; S.sel = ''; S.checked = new Set(); S.project = null; S.work = null;
+  $('list').innerHTML = ''; $('stats').innerHTML = ''; $('workInfo').innerHTML = '';
+  $('detail').innerHTML = '<div class="empty">과제를 고르세요.</div>';
+  $('docPane').innerHTML = '<div class="empty">학생을 고르면 제출한 파일이 여기에 나옵니다.</div>';
+  ['btnRubric', 'btnGrade', 'btnPush'].forEach(id => $(id).disabled = true);
+}
+
+function openWork() {
+  S.workId = $('work').value; resetView(); S.workId = $('work').value;
+  if (!S.workId) return;
+  $('list').innerHTML = '<div class="empty small" id="loadMsg">학생 명단·제출물을 불러오는 중…</div>';
+  const t0 = Date.now();
+  const tick = setInterval(() => { const el = $('loadMsg'); if (el) el.textContent = `학생 명단·제출물을 불러오는 중… ${Math.round((Date.now() - t0) / 1000)}초`; else clearInterval(tick); }, 1000);
+  run('app_open', S.courseId, S.workId).then(d => {
+    clearInterval(tick);
+    S.work = d.work; S.project = d.project;
+    d.students.forEach(s => { S.students[s.subId] = s; S.order.push(s.subId); });
+    $('workInfo').innerHTML =
+      (d.work.state === 'DRAFT' ? '<span class="badge warn">초안 — 게시 후 채점</span> ' : '') +
+      (d.work.maxPoints ? `<span class="badge">만점 ${d.work.maxPoints}</span> ` : '<span class="badge warn">만점 미설정</span> ') +
+      (d.work.api ? '<span class="badge blue">⭐ 점수 자동 반영</span>' : '<span class="badge" title="클래스룸 화면에서 만든 과제는 점수를 직접 입력해야 합니다">점수는 직접 입력</span>');
+    ['btnRubric', 'btnGrade', 'btnPush'].forEach(id => $(id).disabled = false);
+    renderList();
+    $('detail').innerHTML = S.project.rubric.length
+      ? '<div class="empty">왼쪽에서 학생을 고르거나 <b>▶ 채점 시작</b>을 누르세요.</div>'
+      : '<div class="empty">이 과제에 루브릭이 아직 없습니다.<br><button class="primary" onclick="openRubric()">📋 루브릭 올리기</button></div>';
+  }).catch(e => { clearInterval(tick); $('list').innerHTML = `<div class="empty small" style="color:var(--bad)">불러오지 못했습니다.<br>${esc(e && e.message || e)}<br><button onclick="openWork()">다시 시도</button></div>`; });
+}
+
+/* ---------- 학생 목록 ---------- */
+$('search').oninput = renderList;
+function renderList() {
+  const q = $('search').value.trim();
+  const list = S.order.map(id => S.students[id]).filter(s => !q || (s.sid + ' ' + s.name).includes(q));
+  const graded = S.order.map(id => S.students[id]).filter(s => s.graded);
+  const reviews = graded.filter(s => s.review).length;
+  const avg = graded.length ? (graded.reduce((a, s) => a + s.total, 0) / graded.length).toFixed(1) : '-';
+  const max = S.project ? S.project.total : 0;
+  $('stats').innerHTML = `<span class="badge">학생 ${S.order.length}</span><span class="badge ok">채점 ${graded.length}</span>` +
+    (reviews ? `<span class="badge bad">검토 ${reviews}</span>` : '') + `<span class="badge blue">평균 ${avg}${max ? ' / ' + max : ''}</span>`;
+  $('list').innerHTML = list.map(s => {
+    const badges = [];
+    if (s.state && s.state !== 'TURNED_IN' && s.state !== 'RETURNED') badges.push('<span class="badge">미제출</span>');
+    if (s.status === 'error') badges.push('<span class="badge bad">채점 실패</span>');
+    if (s.review) badges.push('<span class="badge bad">검토 필요</span>');
+    if (s.stale) badges.push('<span class="badge warn">다시 제출함</span>');
+    if (s.pushed && s.pushed.startsWith('✅')) badges.push('<span class="badge ok">반영됨</span>');
+    if (s.deductions && s.deductions.length) badges.push(`<span class="badge">감점 ${s.deductions.length}</span>`);
+    return `<div class="stu ${s.subId === S.sel ? 'sel' : ''} ${s.review ? 'review' : ''}" data-id="${esc(s.subId)}">
+      <input type="checkbox" class="pick" data-pick="${esc(s.subId)}" ${S.checked.has(s.subId) ? 'checked' : ''} title="선택">
+      <div><div class="nm"><span class="sid">${esc(s.sid || '')}</span>${esc(s.name)}</div><div class="sub">${badges.join('')}</div></div>
+      <div class="sc">${s.graded ? esc(s.total) : '<span class="muted small">-</span>'}</div></div>`;
+  }).join('') || '<div class="empty small">학생이 없습니다.</div>';
+  $('list').querySelectorAll('.stu').forEach(el => el.onclick = () => select(el.dataset.id));
+  $('list').querySelectorAll('[data-pick]').forEach(el => {
+    el.onclick = e => e.stopPropagation();
+    el.onchange = () => { if (el.checked) S.checked.add(el.dataset.pick); else S.checked.delete(el.dataset.pick); updateBulk(list); };
+  });
+  updateBulk(list);
+}
+
+/* ---------- 학생 여러 명 선택 ---------- */
+function updateBulk(visible) {
+  visible = visible || S.order.map(id => S.students[id]);
+  const vis = visible.map(s => s.subId), n = vis.filter(id => S.checked.has(id)).length;
+  const all = $('selAll');
+  all.checked = vis.length > 0 && n === vis.length;
+  all.indeterminate = n > 0 && n < vis.length;
+  $('selCount').textContent = S.checked.size ? `${S.checked.size}명 선택` : '';
+  $('bulkAct').classList.toggle('on', S.checked.size > 0);
+}
+$('selAll').onchange = () => {
+  const q = $('search').value.trim();
+  const vis = S.order.map(id => S.students[id]).filter(s => !q || (s.sid + ' ' + s.name).includes(q)).map(s => s.subId);
+  vis.forEach(id => { if ($('selAll').checked) S.checked.add(id); else S.checked.delete(id); });
+  renderList();
+};
+$('bRegrade').onclick = () => {
+  const ids = [...S.checked].filter(id => { const s = S.students[id]; return s && s.state && s.state !== 'CREATED' && s.state !== 'RECLAIMED_BY_STUDENT'; });
+  if (!ids.length) return toast('선택한 학생 중 제출한 학생이 없습니다.');
+  const done = ids.filter(id => S.students[id].graded).length;
+  if (done && !confirm(`선택한 ${ids.length}명을 채점합니다. 이미 채점한 ${done}명은 새 결과로 바뀝니다(선생님이 바꾼 체크도 새 결과로 바뀜). 진행할까요?`)) return;
+  gradeList(ids);
+};
+$('bPush').onclick = () => {
+  const ids = [...S.checked].filter(id => S.students[id] && S.students[id].graded);
+  if (!ids.length) return toast('선택한 학생 중 채점한 학생이 없습니다.');
+  const rev = ids.filter(id => S.students[id].review).length;
+  if (!confirm(`선택한 ${ids.length}명 중 검토 필요 ${rev}명을 뺀 점수를 클래스룸에 '임시 점수'로 넣습니다. 진행할까요?`)) return;
+  pushGrades(ids);
+};
+
+function select(id) { S.sel = id; renderList(); renderDoc(); renderDetail(); }
+
+/* ---------- 가운데: 제출 파일 원본 ---------- */
+function fileId(f) { if (f.id) return f.id; const m = String(f.url || '').match(/\/d\/([a-zA-Z0-9_-]+)/); return m ? m[1] : ''; }
+function previewUrl(f) {
+  const id = fileId(f);
+  if (/docs\.google\.com\/document/.test(f.url || '') || !f.url) return `https://docs.google.com/document/d/${id}/preview`;
+  if (/docs\.google\.com\/presentation/.test(f.url)) return `https://docs.google.com/presentation/d/${id}/preview`;
+  if (/docs\.google\.com\/spreadsheets/.test(f.url)) return `https://docs.google.com/spreadsheets/d/${id}/preview`;
+  return `https://drive.google.com/file/d/${id}/preview`;
+}
+function renderDoc(idx) {
+  const s = S.students[S.sel];
+  const pane = $('docPane');
+  const files = (s && (s.files && s.files.length ? s.files : (s.docLinks || []))) || [];
+  if (!s || !files.length) { pane.innerHTML = `<div class="empty">${s ? '제출한 파일이 없습니다.' : '학생을 고르면 제출한 파일이 여기에 나옵니다.'}</div>`; return; }
+  const i = Math.min(idx || 0, files.length - 1), f = files[i];
+  pane.innerHTML = `<div class="bar">
+      ${files.length > 1 ? files.map((x, k) => `<button class="tab ${k === i ? 'on' : ''}" data-tab="${k}">${esc(x.title)}</button>`).join('') : `<b class="small">📄 ${esc(f.title)}</b>`}
+      <span class="spacer"></span><a class="small" href="${esc(f.url || previewUrl(f))}" target="_blank" rel="noopener">새 탭에서 열기 ↗</a></div>
+    <iframe src="${esc(previewUrl(f))}" title="학생 제출 파일" loading="lazy"></iframe>`;
+  pane.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => renderDoc(Number(b.dataset.tab)));
+}
+
+/* ---------- 학생 상세 ---------- */
+function renderDetail() {
+  const s = S.students[S.sel];
+  if (!s) return;
+  const p = S.project;
+  const d = $('detail');
+  if (!s.graded) {
+    d.innerHTML = `<div class="card head"><div class="who">${esc(s.sid)} ${esc(s.name)}</div>
+      ${s.error ? `<div class="banner bad">${esc(s.error)}</div>` : '<span class="muted">아직 채점하지 않았습니다.</span>'}
+      <span class="spacer"></span><button class="primary" onclick="gradeList([S.sel])">이 학생 채점</button></div>`;
+    return;
+  }
+  const items = p.rubric.map(q => {
+    const it = s.items.find(i => i.no === q.no) || { score: 0 };
+    const checks = p.checklist[q.no] || [];
+    const body = checks.length ? checks.map(c => {
+      const ck = s.checks[c.id] || { met: false, reason: '' };
+      const edited = ck.ai !== undefined && ck.ai !== ck.met;
+      return `<label class="check ${ck.met ? '' : 'miss'}">
+        <input type="checkbox" data-check="${esc(c.id)}" ${ck.met ? 'checked' : ''}>
+        <div><div class="t">${esc(c.id)} ${esc(c.label)}<span class="pt">${ck.met ? '+' : '−'}${esc(c.points)}점</span></div>
+        <div class="why ${edited ? 'edited' : ''}">${ck.met ? '✔' : '✘'} ${esc(ck.reason)}</div>
+        <div class="why small" title="체크 기준">기준: ${esc(c.desc)}</div></div></label>`;
+    }).join('') : `<div class="row">점수 <input type="number" data-score="${esc(q.no)}" value="${esc(it.score)}" min="0" max="${esc(q.points)}" step="${esc(p.unit || 1)}"> / ${esc(q.points)}
+       ${s.itemNotes[q.no] ? `<span class="small muted">${esc(s.itemNotes[q.no])}</span>` : ''}</div>`;
+    return `<div class="card item"><h3><span>${esc(q.no)}. ${esc(q.name)} ${q.evidence && q.evidence.length ? `<span class="badge blue">${esc(q.evidence.join('·'))} 이미지</span>` : ''}</span>
+      <span class="s">${esc(it.score)} / ${esc(q.points)}</span></h3>${body}
+      ${s.rationale[q.no] ? `<div class="rat">AI 요약: ${esc(s.rationale[q.no])}</div>` : ''}</div>`;
+  }).join('');
+
+  const deds = s.deductions.length
+    ? `<div class="ded">감점 사유 ${s.deductions.map(x => `<span class="chip">${esc(x.id)} ${esc(x.label)} −${esc(x.points)}</span>`).join('')}</div>`
+    : '<div class="nodeds">✔ 감점 없음</div>';
+  const docs = (s.docLinks || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">📄 ${esc(l.title)}</a>`).join(' ');
+
+  d.innerHTML = `
+    <div class="card">
+      <div class="head">
+        <input type="text" class="sidin" id="sidIn" value="${esc(s.sid)}" title="학번(직접 수정 가능)">
+        <div class="who">${esc(s.name)}</div>
+        <div class="total">${esc(s.total)}<small> / ${esc(p.total)}</small></div>
+        <span class="spacer"></span>
+        <button onclick="gradeList([S.sel])">↻ 다시 채점</button>
+      </div>
+      ${deds}
+      ${s.review ? `<div class="banner bad"><span class="msg">⚠️ 검토 필요: ${esc(s.review)}</span><button id="resolve">검토 완료 (반영 허용)</button></div>` : ''}
+      ${s.stale ? '<div class="banner warn">학생이 채점 후 다시 제출했습니다. 다시 채점하세요.</div>' : ''}
+      ${s.pushed ? `<div class="small muted" style="margin-top:6px">클래스룸: ${esc(s.pushed)}</div>` : ''}
+      <div class="row small" style="margin-top:8px"><span class="spacer"></span><button id="loadImgs">🖼 이미지만 모아 보기</button></div>
+      <div id="imgBox" style="margin-top:10px"></div>
+    </div>
+    ${items}
+    <div class="card"><h3 style="margin:0 0 8px;font-size:15px">학생에게 줄 피드백</h3>
+      <textarea id="fb" rows="3">${esc(s.feedback)}</textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="fbSave">피드백 저장</button></div></div>`;
+
+  d.querySelectorAll('[data-check]').forEach(el => el.onchange = () => {
+    el.disabled = true;
+    run('app_setCheck', S.courseId, S.workId, S.sel, el.dataset.check, el.checked).then(updateStudent).catch(e => { el.checked = !el.checked; el.disabled = false; fail(e); });
+  });
+  d.querySelectorAll('[data-score]').forEach(el => el.onchange = () => {
+    run('app_setScore', S.courseId, S.workId, S.sel, el.dataset.score, Number(el.value)).then(updateStudent).catch(fail);
+  });
+  if ($('resolve')) $('resolve').onclick = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { resolveReview: true }).then(updateStudent).catch(fail);
+  $('fbSave').onclick = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { feedback: $('fb').value }).then(v => { updateStudent(v); toast('피드백을 저장했습니다.'); }).catch(fail);
+  $('sidIn').onchange = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { sid: $('sidIn').value.trim() }).then(updateStudent).catch(fail);
+  $('loadImgs').onclick = () => {
+    $('imgBox').innerHTML = '<span class="small muted">이미지를 불러오는 중…</span>';
+    run('app_images', S.courseId, S.workId, S.sel).then(list => {
+      $('imgBox').innerHTML = list.length
+        ? '<div class="imgs">' + list.map(i => `<figure><img src="${i.url}" alt="${esc(i.label)}"><figcaption>${esc(i.label)}</figcaption></figure>`).join('') + '</div>'
+        : '<span class="small muted">문서에 이미지가 없거나, 너무 커서 불러오지 못했습니다.</span>';
+      $('imgBox').querySelectorAll('img').forEach(img => img.onclick = () => { $('zoomImg').src = img.src; $('zoom').classList.add('open'); });
+    }).catch(fail);
+  };
+}
+
+function updateStudent(v) {
+  const old = S.students[v.subId] || {};
+  S.students[v.subId] = Object.assign({}, old, v, { state: old.state || v.state });
+  if (!S.order.includes(v.subId)) S.order.push(v.subId);
+  renderList();
+  if (S.sel === v.subId) renderDetail();
+}
+
+/* ---------- 채점 실행 ---------- */
+$('btnGrade').onclick = () => startGrading(false);
+$('btnStop').onclick = () => { S.stop = true; toast('지금 채점 중인 학생까지만 하고 멈춥니다.'); };
+
+function startGrading(force) {
+  if (!S.project || !S.project.rubric.length) { openRubric(); return toast('먼저 루브릭을 올려 주세요.'); }
+  run('app_pending', S.courseId, S.workId, force).then(ids => {
+    if (!ids.length) return toast('새로 채점할 제출물이 없습니다. (전체 다시 채점은 ⋯ 메뉴)');
+    gradeList(ids);
+  }).catch(fail);
+}
+
+async function gradeList(ids) {
+  if (S.running) return toast('이미 채점 중입니다.');
+  S.running = true; S.stop = false;
+  $('btnGrade').style.display = 'none'; $('btnStop').style.display = '';
+  let done = 0, failN = 0;
+  const total = ids.length, queue = ids.slice();
+  const bar = $('bar');
+  const worker = async () => {
+    while (queue.length && !S.stop) {
+      const id = queue.shift();
+      try {
+        const v = await run('app_gradeOne', S.courseId, S.workId, id);
+        if (v.status === 'error') failN++;
+        updateStudent(v);
+      } catch (e) { failN++; fail(e); }
+      done++;
+      bar.style.width = (done / total * 100) + '%';
+      toast(`채점 중… ${done} / ${total}`, 60000);
+    }
+  };
+  await Promise.all([worker(), worker()]);   // 두 명씩 동시에
+  S.running = false;
+  $('btnGrade').style.display = ''; $('btnStop').style.display = 'none';
+  setTimeout(() => bar.style.width = '0', 800);
+  toast(`채점 끝: ${done}명` + (failN ? ` (실패 ${failN}명)` : '') + (S.stop ? ' — 멈춤' : ''), 6000);
+}
+
+/* ---------- 클래스룸 반영 ---------- */
+$('btnPush').onclick = () => {
+  const graded = S.order.map(id => S.students[id]).filter(s => s.graded);
+  const reviews = graded.filter(s => s.review).length;
+  if (!graded.length) return toast('채점한 학생이 없습니다.');
+  if (!confirm(`채점한 ${graded.length}명 중 검토 필요 ${reviews}명을 뺀 나머지의 점수를 클래스룸에 '임시 점수'로 넣습니다.\n학생에게는 클래스룸에서 '반환'하기 전까지 보이지 않습니다. 진행할까요?`)) return;
+  pushGrades(null);
+};
+function pushGrades(ids) {
+  toast('클래스룸에 반영하는 중…', 60000);
+  run('app_push', S.courseId, S.workId, ids).then(r => {
+    if (r.blocked) alert('이 과제는 클래스룸 화면에서 직접 만든 과제라 점수 자동 반영이 막혀 있습니다(구글 정책).\n\n• 이번 과제: 앱의 점수를 보고 클래스룸에 직접 입력하거나 ⋯ › 시트로 내보내기를 이용하세요.\n• 다음 과제부터: ⋯ › 활동지 사본 배포 과제 만들기로 과제를 만들면 자동 반영됩니다.');
+    else toast(`반영 ${r.pushed}명 / 건너뜀 ${r.skipped}명` + (r.scale !== 1 ? ` (루브릭 ${r.rubricTotal}점 → 만점 ${r.maxPoints}점 환산)` : ''), 7000);
+    openWork();
+  }).catch(fail);
+}
+
+/* ---------- ⋯ 메뉴 ---------- */
+$('btnMore').onclick = e => { e.stopPropagation(); $('moreList').classList.toggle('open'); };
+document.addEventListener('click', () => $('moreList').classList.remove('open'));
+$('moreList').querySelectorAll('button').forEach(b => b.onclick = () => {
+  const a = b.dataset.act;
+  if (a === 'settings') return openSettings();
+  if (a === 'create') return openCreate();
+  if (!S.workId) return toast('먼저 과제를 고르세요.');
+  if (a === 'regradeAll') { if (confirm('제출한 학생 전체를 다시 채점할까요? (선생님이 바꾼 체크도 새 결과로 바뀝니다)')) startGrading(true); }
+  if (a === 'test') { $('tOut').innerHTML = ''; openModal('mTest'); }
+  if (a === 'export') { toast('시트를 만드는 중…', 30000); run('app_export', S.courseId, S.workId).then(url => { toast('시트를 만들었습니다.'); window.open(url, '_blank'); }).catch(fail); }
+  if (a === 'comments') { if (confirm('학생마다 피드백을 문서 댓글로 답니다. 학생에게 바로 보입니다. 진행할까요?')) run('app_postComments', S.courseId, S.workId).then(n => toast(`${n}명의 문서에 댓글을 달았습니다.`)).catch(fail); }
+});
+
+/* ---------- 루브릭·자료 창 ---------- */
+$('btnRubric').onclick = openRubric;
+function openRubric() { renderMaterials(); renderRubricEditor(); openModal('mRubric'); }
+
+function renderMaterials() {
+  const p = S.project;
+  setSt('rSt', p.rubric.length ? `현재 루브릭: ${p.rubric.length}개 항목, 합계 ${p.total}점` : '아직 루브릭이 없습니다.');
+  setSt('wSt', p.worksheet.chars ? `현재 빈 활동지: ${p.worksheet.name} (${p.worksheet.chars.toLocaleString()}자)` : '빈 활동지 없음 (없어도 채점됩니다)');
+  setSt('eSt', p.example.chars ? `현재 예시답안: ${p.example.name} (${p.example.chars.toLocaleString()}자${p.example.images ? ', 이미지 ' + p.example.images + '장' : ''})` : '예시답안 없음 (없어도 채점됩니다)');
+  $('ctx').value = p.context || '';
+  $('unitTxt').textContent = p.unit ? p.unit + '점' : '-';
+}
+
+$('rUp').onclick = async () => {
+  try {
+    const file = await readFile($('rf')); const text = $('rt').value.trim();
+    if (!file && !text) return setSt('rSt', '파일을 고르거나 내용을 붙여 넣어 주세요.', 'bad');
+    $('rUp').disabled = true; setSt('rSt', '루브릭을 정리하고 세부항목까지 만드는 중… (1~2분)');
+    const r = await run('app_uploadRubric', S.courseId, S.workId, file, text);
+    S.project = r.project; $('rUp').disabled = false; $('rf').value = ''; $('rt').value = '';
+    renderMaterials(); renderRubricEditor();
+    setSt('rSt', `✅ ${r.project.rubric.length}개 항목, 합계 ${r.project.total}점, 점수 단위 ${r.project.unit || '-'}점` + (r.notes ? '\n⚠️ 확인: ' + r.notes : '') + '\n아래에서 세부항목을 확인·수정하세요.', 'ok');
+  } catch (e) { $('rUp').disabled = false; setSt('rSt', '오류: ' + e.message, 'bad'); }
+};
+$('wUp').onclick = async () => {
+  try {
+    const file = await readFile($('wf')); const text = $('wt').value.trim();
+    if (!file && !text) return setSt('wSt', '파일을 고르거나 링크·내용을 넣어 주세요.', 'bad');
+    setSt('wSt', '읽는 중…'); S.project = await run('app_uploadWorksheet', S.courseId, S.workId, file, text); renderMaterials();
+  } catch (e) { setSt('wSt', '오류: ' + e.message, 'bad'); }
+};
+$('wReload').onclick = () => { setSt('wSt', '가져오는 중…'); run('app_reloadWorksheet', S.courseId, S.workId).then(p => { S.project = p; renderMaterials(); }).catch(e => setSt('wSt', '오류: ' + e.message, 'bad')); };
+$('eUp').onclick = async () => {
+  try {
+    const file = await readFile($('ef')); const text = $('et').value.trim();
+    if (!file && !text) return setSt('eSt', '파일을 고르거나 링크·내용을 넣어 주세요.', 'bad');
+    setSt('eSt', '읽는 중…'); S.project = await run('app_uploadExample', S.courseId, S.workId, file, text); renderMaterials();
+  } catch (e) { setSt('eSt', '오류: ' + e.message, 'bad'); }
+};
+$('eClear').onclick = () => run('app_clearExample', S.courseId, S.workId).then(p => { S.project = p; renderMaterials(); }).catch(fail);
+$('ctxSave').onclick = () => run('app_saveContext', S.courseId, S.workId, $('ctx').value).then(p => { S.project = p; toast('저장했습니다.'); }).catch(fail);
+
+/* 루브릭·세부항목 편집기 */
+let ED = null;
+function renderRubricEditor() {
+  const p = S.project;
+  ED = { rubric: JSON.parse(JSON.stringify(p.rubric)), checklist: JSON.parse(JSON.stringify(p.checklist)) };
+  drawEditor();
+}
+function drawEditor() {
+  const has = ED.rubric.length > 0;
+  $('ckRegen').disabled = !has; $('rbSave').disabled = !has;
+  if (!has) { $('rubricEd').innerHTML = '위 <b>1. 평가 루브릭</b>에서 파일을 고르고 <b>[루브릭 불러오기]</b>를 누르면 여기에 항목과 세부항목이 나타납니다.'; return; }
+  $('rubricEd').innerHTML = ED.rubric.map((q, qi) => {
+    const cks = ED.checklist[q.no] || [];
+    const sum = cks.reduce((a, c) => a + Number(c.points || 0), 0);
+    const ev = ['그래프', '코드', '실행결과'].map(t => `<label class="small"><input type="checkbox" data-ev="${qi}" value="${t}" ${(q.evidence || []).includes(t) ? 'checked' : ''}> ${t}</label>`).join(' ');
+    return `<div class="sec" style="margin:8px 0">
+      <div class="row"><b>${esc(q.no)}.</b><input type="text" data-q="${qi}" data-f="name" value="${esc(q.name)}" style="flex:1">
+        배점 <input type="number" data-q="${qi}" data-f="points" value="${esc(q.points)}" style="width:80px">
+        <span class="small muted">평가 이미지:</span> ${ev}</div>
+      <details style="margin:6px 0"><summary class="small muted">채점 기준(루브릭 원문) 보기·수정</summary>
+        <textarea data-q="${qi}" data-f="criteria" rows="4">${esc(q.criteria)}</textarea></details>
+      <table class="ed"><tr><th style="width:52px">번호</th><th style="width:150px">짧은 이름</th><th>체크 기준</th><th style="width:80px">점수</th><th style="width:30px"></th></tr>
+        ${cks.map((c, ci) => `<tr><td>${esc(q.no)}-${ci + 1}</td>
+          <td><input type="text" data-c="${esc(q.no)}" data-i="${ci}" data-f="label" value="${esc(c.label)}"></td>
+          <td><input type="text" data-c="${esc(q.no)}" data-i="${ci}" data-f="desc" value="${esc(c.desc)}"></td>
+          <td><input type="number" data-c="${esc(q.no)}" data-i="${ci}" data-f="points" value="${esc(c.points)}"></td>
+          <td><button class="ghost" data-del="${esc(q.no)}" data-i="${ci}" title="삭제">✕</button></td></tr>`).join('')}
+      </table>
+      <div class="row small" style="margin-top:4px"><button class="ghost" data-add="${esc(q.no)}">＋ 세부항목 추가</button>
+        <span class="spacer"></span><span class="sum ${sum !== Number(q.points) ? 'bad' : ''}">세부항목 합 ${sum} / 배점 ${esc(q.points)}</span></div>
+    </div>`;
+  }).join('');
+  const box = $('rubricEd');
+  box.querySelectorAll('[data-q]').forEach(el => el.oninput = () => { const q = ED.rubric[el.dataset.q]; q[el.dataset.f] = el.dataset.f === 'points' ? Number(el.value) : el.value; if (el.dataset.f === 'points') drawEditorSums(); });
+  box.querySelectorAll('[data-ev]').forEach(el => el.onchange = () => {
+    const q = ED.rubric[el.dataset.ev]; q.evidence = q.evidence || [];
+    if (el.checked) q.evidence.push(el.value); else q.evidence = q.evidence.filter(t => t !== el.value);
+  });
+  box.querySelectorAll('[data-c]').forEach(el => el.oninput = () => {
+    const c = ED.checklist[el.dataset.c][el.dataset.i]; c[el.dataset.f] = el.dataset.f === 'points' ? Number(el.value) : el.value;
+    if (el.dataset.f === 'points') drawEditorSums();
+  });
+  box.querySelectorAll('[data-del]').forEach(el => el.onclick = () => { ED.checklist[el.dataset.del].splice(el.dataset.i, 1); drawEditor(); });
+  box.querySelectorAll('[data-add]').forEach(el => el.onclick = () => { (ED.checklist[el.dataset.add] = ED.checklist[el.dataset.add] || []).push({ label: '', desc: '', points: S.project.unit || 5 }); drawEditor(); });
+}
+function drawEditorSums() {
+  const sums = $('rubricEd').querySelectorAll('.sum');
+  ED.rubric.forEach((q, i) => {
+    const sum = (ED.checklist[q.no] || []).reduce((a, c) => a + Number(c.points || 0), 0);
+    if (sums[i]) { sums[i].textContent = `세부항목 합 ${sum} / 배점 ${q.points}`; sums[i].classList.toggle('bad', sum !== Number(q.points)); }
+  });
+}
+$('rbSave').onclick = () => {
+  if (!ED || !ED.rubric.length) return;
+  const bad = ED.rubric.filter(q => (ED.checklist[q.no] || []).reduce((a, c) => a + Number(c.points || 0), 0) !== Number(q.points));
+  if (bad.length && !confirm(`${bad.map(q => q.no + '번').join(', ')} 항목의 세부항목 합이 배점과 다릅니다. 그래도 저장할까요? (항목 점수는 배점을 넘지 않습니다)`)) return;
+  run('app_saveRubric', S.courseId, S.workId, ED.rubric, ED.checklist).then(p => {
+    S.project = p; renderMaterials(); renderRubricEditor(); toast('루브릭·세부항목을 저장했습니다. 이미 채점한 학생에게 바뀐 세부항목을 적용하려면 다시 채점하세요.', 7000); openWork();
+  }).catch(fail);
+};
+$('ckRegen').onclick = () => {
+  if (!confirm('지금 루브릭으로 세부항목을 AI가 다시 만듭니다. 직접 고친 세부항목은 사라집니다. 진행할까요?')) return;
+  $('ckRegen').disabled = true; toast('세부항목을 만드는 중… (30초~1분)', 60000);
+  run('app_regenChecklist', S.courseId, S.workId).then(p => { S.project = p; $('ckRegen').disabled = false; renderRubricEditor(); toast('세부항목을 다시 만들었습니다.'); })
+    .catch(e => { $('ckRegen').disabled = false; fail(e); });
+};
+
+/* ---------- 테스트 ---------- */
+$('tRun').onclick = () => {
+  $('tRun').disabled = true; $('tOut').innerHTML = '<span class="muted small">채점 중… (30초~1분)</span>';
+  run('app_test', S.courseId, S.workId, $('tText').value, $('tLink').value.trim()).then(r => {
+    $('tRun').disabled = false;
+    const p = S.project;
+    $('tOut').innerHTML = `<div class="card"><div class="head"><div class="total">${esc(r.total)}<small> / ${esc(p.total)}</small></div>
+      <span class="small muted">이미지 ${r.imageCount}장 읽음</span></div>
+      ${r.deductions.length ? `<div class="ded">감점 사유 ${r.deductions.map(x => `<span class="chip">${esc(x.id)} ${esc(x.label)} −${esc(x.points)}</span>`).join('')}</div>` : '<div class="nodeds">✔ 감점 없음</div>'}
+      ${r.review ? `<div class="banner bad">⚠️ 검토 필요: ${esc(r.review)}</div>` : ''}</div>` +
+      p.rubric.map(q => {
+        const it = r.items.find(i => i.no === q.no);
+        const cks = p.checklist[q.no] || [];
+        return `<div class="card item"><h3><span>${esc(q.no)}. ${esc(q.name)}</span><span class="s">${esc(it.score)} / ${esc(q.points)}</span></h3>` +
+          cks.map(c => { const ck = r.checks[c.id] || {}; return `<div class="check ${ck.met ? '' : 'miss'}"><input type="checkbox" disabled ${ck.met ? 'checked' : ''}><div><div class="t">${esc(c.id)} ${esc(c.label)}<span class="pt">${esc(c.points)}점</span></div><div class="why">${ck.met ? '✔' : '✘'} ${esc(ck.reason)}</div></div></div>`; }).join('') +
+          (r.rationale[q.no] ? `<div class="rat">AI 요약: ${esc(r.rationale[q.no])}</div>` : '') + '</div>';
+      }).join('') + `<div class="card"><b>피드백</b><p>${esc(r.feedback)}</p></div>`;
+  }).catch(e => { $('tRun').disabled = false; $('tOut').innerHTML = ''; fail(e); });
+};
+
+/* ---------- 설정 ---------- */
+const SETTING_HELP = {
+  'API 주소': 'BAZE: Claude는 기본값. GPT·Gemini 등은 https://api.baze.co/v1/gateway/chat/completions + 요청 형식 openai',
+  '요청 형식': 'anthropic / openai', '인증 방식': 'bearer / x-api-key', '모델': '예) claude-sonnet-5-5',
+  '추론 강도(effort)': 'low / medium / high — 높을수록 정교하지만 느리고 비쌈', '피드백 말투': '학생에게 주는 피드백 작성 지침', '채점 대상': '제출완료만 / 반환포함',
+};
+function openSettings() {
+  run('app_init').then(d => {
+    S.settings = d.settings;
+    $('setForm').innerHTML = Object.keys(SETTING_HELP).map(k => `<label><b>${esc(k)}</b><input type="text" data-set="${esc(k)}" value="${esc(d.settings[k])}" style="width:100%"><div class="small muted">${esc(SETTING_HELP[k])}</div></label>`).join('') +
+      `<div class="small ${d.hasKey ? 'muted' : ''}" style="color:${d.hasKey ? '' : 'var(--bad)'}">API 키: ${d.hasKey ? '✅ 등록됨' : '❌ 없음'}</div>`;
+    openModal('mSettings');
+  }).catch(fail);
+}
+$('setSave').onclick = () => {
+  const o = {}; document.querySelectorAll('[data-set]').forEach(el => o[el.dataset.set] = el.value.trim());
+  run('app_saveSettings', o).then(() => { toast('설정을 저장했습니다.'); $('mSettings').classList.remove('open'); }).catch(fail);
+};
+
+/* ---------- 사본 배포 과제 ---------- */
+function openCreate() {
+  if (!S.courseId) return toast('먼저 수업을 고르세요.');
+  $('cDoc').innerHTML = '<option>불러오는 중…</option>'; setSt('cSt', ''); openModal('mCreate');
+  run('app_recentDocs').then(docs => { $('cDoc').innerHTML = docs.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join(''); }).catch(fail);
+}
+$('cGo').onclick = () => {
+  $('cGo').disabled = true; setSt('cSt', '만드는 중…');
+  run('app_createAssignment', S.courseId, $('cDoc').value, $('cTitle').value.trim(), $('cMax').value).then(r => {
+    $('cGo').disabled = false; setSt('cSt', `✅ "${r.title}" 초안을 만들었습니다. 클래스룸에서 기한을 정해 게시하세요.`, 'ok');
+    loadWorks(r.id);
+  }).catch(e => { $('cGo').disabled = false; setSt('cSt', '오류: ' + e.message, 'bad'); });
+};
+</script>
+</body>
+</html>
