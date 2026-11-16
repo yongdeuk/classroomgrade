@@ -52,7 +52,7 @@
   .progress > div { height: 100%; width: 0; background: var(--brand); transition: width .3s; }
 
   /* ---------- 본문 ---------- */
-  main { display: grid; grid-template-columns: 300px minmax(0, 1fr) minmax(380px, 34%); gap: 0; height: calc(100vh - 62px); }
+  main { display: grid; grid-template-columns: clamp(320px, 20vw, 520px) minmax(0, 1fr) clamp(480px, 40vw, 1100px); gap: 0; height: calc(100vh - 62px); }
   .doc { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: #eef0f3; }
   .doc .bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .doc .bar .tab { font-size: 13px; padding: 4px 10px; }
@@ -79,7 +79,7 @@
   .stu .sc { font-size: 18px; font-weight: 700; min-width: 44px; text-align: center; }
   .stu.review .nm { color: var(--bad); }
 
-  .right { overflow: auto; padding: 14px 14px 40px; min-height: 0; }
+  .right { overflow: auto; padding: 14px 18px 40px; min-height: 0; }
   .banner .msg { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
   .empty { color: var(--muted); text-align: center; margin-top: 18vh; line-height: 1.8; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
@@ -102,9 +102,9 @@
   .check .t { font-weight: 500; }
   .check .t .pt { color: var(--muted); font-weight: 400; margin-left: 4px; }
   .check.miss .t { color: var(--bad); }
-  .check .why { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .check .why { font-size: 13.5px; line-height: 1.6; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
   .check .why.edited::after { content: ' · 선생님 수정'; color: var(--brand); }
-  .rat { font-size: 12.5px; color: var(--muted); margin-top: 8px; background: #f8f9fa; border-radius: 6px; padding: 6px 8px; }
+  .rat { font-size: 13.5px; line-height: 1.6; color: var(--muted); margin-top: 8px; background: #f8f9fa; border-radius: 6px; padding: 6px 8px; }
   .imgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
   .imgs figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; cursor: zoom-in; }
   .imgs img { width: 100%; display: block; }
@@ -147,7 +147,7 @@
   .toast.open { display: block; }
 
   @media (max-width: 1100px) {
-    main { grid-template-columns: 260px minmax(0, 1fr); height: auto; }
+    main { grid-template-columns: clamp(260px, 26vw, 340px) minmax(0, 1fr); height: auto; }
     .doc { height: calc(100vh - 62px); }
     .right { grid-column: 1 / -1; }
   }
