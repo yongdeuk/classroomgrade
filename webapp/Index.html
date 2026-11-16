@@ -186,6 +186,7 @@
       <button data-act="regradeAll">전체 다시 채점</button>
       <button data-act="test">🧪 테스트 채점(저장 안 함)</button>
       <button data-act="export">📄 시트로 내보내기</button>
+      <button data-act="rebuildFb">📝 피드백을 감점 내용으로 모두 다시 만들기</button>
       <button data-act="comments">💬 피드백을 학생 문서에 댓글로</button>
       <button data-act="create">➕ 활동지 사본 배포 과제 만들기</button>
       <button data-act="settings">⚙ 설정</button>
@@ -664,9 +665,10 @@ function renderDetail() {
       <div id="imgBox" style="margin-top:10px"></div>
     </div>
     ${items}
-    <div class="card"><h3 style="margin:0 0 8px;font-size:15px">학생에게 줄 피드백</h3>
-      <textarea id="fb" rows="3">${esc(s.feedback)}</textarea>
-      <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="fbSave">피드백 저장</button></div></div>`;
+    <div class="card"><h3 style="margin:0 0 8px;font-size:15px">학생에게 줄 피드백 <span class="small muted" style="font-weight:400">감점과 감점 요인만 · 감점된 항목은 모두 적힙니다</span></h3>
+      <textarea id="fb" rows="${Math.min(16, Math.max(4, String(s.feedback || '').split('\n').length + 1))}">${esc(s.feedback)}</textarea>
+      <div class="row" style="justify-content:space-between;margin-top:6px"><span class="small muted">${s.feedbackEdited ? '✎ 직접 고친 글입니다 (체크를 바꿔도 자동으로 바뀌지 않아요)' : '체크를 바꾸면 자동으로 따라 바뀝니다'}</span>
+        <span class="row"><button id="fbRebuild" title="체크 결과로 감점 내용을 다시 만듭니다">감점 내용으로 다시 만들기</button><button id="fbSave">피드백 저장</button></span></div></div>`;
 
   d.querySelectorAll('[data-check]').forEach(el => el.onchange = () => toggleCheck(S.sel, el.dataset.check, el.checked));
   showSaveMsg();
@@ -675,6 +677,7 @@ function renderDetail() {
     run('app_setScore', S.courseId, S.workId, S.sel, el.dataset.score, Number(el.value)).then(updateStudent).catch(fail);
   });
   if ($('resolve')) $('resolve').onclick = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { resolveReview: true }).then(updateStudent).catch(fail);
+  $('fbRebuild').onclick = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { rebuildFeedback: true }).then(v => { updateStudent(v); toast('감점 내용으로 다시 만들었습니다.'); }).catch(fail);
   $('fbSave').onclick = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { feedback: $('fb').value }).then(v => { updateStudent(v); toast('피드백을 저장했습니다.'); }).catch(fail);
   $('sidIn').onchange = () => run('app_saveStudent', S.courseId, S.workId, S.sel, { sid: $('sidIn').value.trim() }).then(updateStudent).catch(fail);
   $('loadImgs').onclick = () => {
@@ -742,6 +745,32 @@ function toggleConfirm(ids, on) {
     .then(() => { CHK.pending--; if (CHK.pending === 0 && S.saveCls !== 'bad') showSaveMsg('✔ 저장됨 ' + stamp(), 'ok'); });
   toast((on ? '✔ 채점 완료로 표시했습니다' : '채점 완료를 해제했습니다') + ` (${targets.length}명)` + (skippedN ? ` · ${skippedN}명 제외` : ''), 3000);
 }
+/** 서버 feedbackText_와 같은 규칙: 감점과 감점 요인만, 감점된 것은 모두 */
+function feedbackLocal(s) {
+  const p = S.project, lines = []; let sum = 0;
+  p.rubric.forEach(q => {
+    const checks = p.checklist[q.no] || [];
+    if (checks.length) {
+      const miss = checks.filter(c => !(s.checks && s.checks[c.id] && s.checks[c.id].met));
+      if (!miss.length) return;
+      const d = miss.reduce((a, c) => a + c.points, 0); sum += d;
+      lines.push(`■ ${q.no}. ${q.name} (−${d}점)`);
+      miss.forEach(c => {
+        const ck = s.checks && s.checks[c.id];
+        let why = ck ? String(ck.reason || '').replace(/^[✔✘]\s*/, '').trim() : '';
+        if (why === '(평가 없음)') why = '';
+        if (ck && ck.ai === true && ck.met === false) why = '교사 확인 결과 기준을 충족하지 못함';
+        lines.push(`  • ${c.id} ${c.label} (−${c.points}점): ${why || '기준 미충족 — ' + c.desc}`);
+      });
+    } else {
+      const it = (s.items || []).find(i => i.no === q.no), d = q.points - (it ? it.score : 0);
+      if (d > 0) { sum += d; lines.push(`■ ${q.no}. ${q.name} (−${d}점)`); const why = (s.rationale || {})[q.no]; if (why) lines.push(`  • ${why}`); }
+    }
+  });
+  if (!lines.length) return '감점 없음';
+  lines.push(`합계 −${sum}점`);
+  return lines.join('\n');
+}
 function rerenderKeepScroll() { const sc = $('detail').scrollTop; renderList(); renderDetail(); $('detail').scrollTop = sc; }
 function toggleCheck(subId, cid, met) {
   const s = S.students[subId]; if (!s || !S.project) return;
@@ -749,6 +778,7 @@ function toggleCheck(subId, cid, met) {
   const had = s.checks[cid], prev = had ? !!had.met : false;
   if (!had) s.checks[cid] = { met: false, ai: false, reason: '' };
   s.checks[cid].met = met; recomputeStudent(s);                 // 1) 화면은 바로 바꾸고
+  if (!s.feedbackEdited) s.feedback = feedbackLocal(s);          //    (직접 고치지 않은) 피드백도 함께
   if (S.sel === subId) rerenderKeepScroll(); else renderList();
   CHK.pending++; showSaveMsg('저장 중…');
   CHK.chain = CHK.chain                                           // 2) 저장은 누른 순서대로 하나씩
@@ -835,6 +865,7 @@ $('moreList').querySelectorAll('button').forEach(b => b.onclick = () => {
   if (!S.workId) return toast('먼저 과제를 고르세요.');
   if (a === 'regradeAll') { if (confirm('제출한 학생 전체를 다시 채점할까요? (선생님이 바꾼 체크도 새 결과로 바뀝니다)')) startGrading(true); }
   if (a === 'test') { $('tOut').innerHTML = ''; openModal('mTest'); }
+  if (a === 'rebuildFb') { if (confirm('채점한 모든 학생의 피드백을 감점과 감점 요인으로 다시 만듭니다. 직접 고쳐 쓴 피드백도 바뀝니다. 진행할까요?')) run('app_rebuildFeedback', S.courseId, S.workId).then(r => refreshWork().then(() => toast(`${r.count}명의 피드백을 다시 만들었습니다.`, 5000))).catch(fail); return; }
   if (a === 'export') { run('app_export', S.courseId, S.workId).then(url => { toast('시트를 만들었습니다.'); window.open(url, '_blank'); }).catch(fail); }
   if (a === 'comments') { if (confirm('학생마다 피드백을 문서 댓글로 답니다. 학생에게 바로 보입니다. 진행할까요?')) run('app_postComments', S.courseId, S.workId).then(n => toast(`${n}명의 문서에 댓글을 달았습니다.`)).catch(fail); }
 });
@@ -1205,7 +1236,7 @@ $('tRun').onclick = () => {
 const SETTING_HELP = {
   'API 주소': 'BAZE: Claude는 기본값. GPT·Gemini 등은 https://api.baze.co/v1/gateway/chat/completions + 요청 형식 openai',
   '요청 형식': 'anthropic / openai', '인증 방식': 'bearer / x-api-key', '모델': '예) claude-sonnet-5-5',
-  '추론 강도(effort)': 'low / medium / high — 높을수록 정교하지만 느리고 비쌈', '피드백 말투': '학생에게 주는 피드백 작성 지침', '채점 대상': '제출완료만 / 반환포함',
+  '추론 강도(effort)': 'low / medium / high — 높을수록 정교하지만 느리고 비쌈', '채점 대상': '제출완료만 / 반환포함',
 };
 function openSettings() {
   run('app_init').then(d => {
