@@ -254,7 +254,7 @@ function studentView_(p, subId, base) {
   const c = computeScore_(p, r);
   Object.assign(v, c, {
     status: r.review ? 'review' : 'done',
-    outdated: !!r.outdated, review: r.review || '', feedback: r.feedback || '', checks: r.checks || {}, itemNotes: r.itemNotes || {},
+    confirmed: !!r.confirmed, confirmedAt: r.confirmedAt || '', outdated: !!r.outdated, review: r.review || '', feedback: r.feedback || '', checks: r.checks || {}, itemNotes: r.itemNotes || {},
     rationale: r.rationale || {}, docLinks: r.docLinks || [], pushed: r.pushed || '', gradedAt: r.gradedAt,
     stale: base && base.updateTime && r.updateTime && String(base.updateTime) !== String(r.updateTime),
   });
@@ -322,7 +322,7 @@ function app_gradeOne(courseId, workId, subId) {
     const result = gradeWithClaude_(p1, answerText, docs.images);
     Object.assign(rec, resultToRecord_(p1, result), {
       review: reviewText_(result, reviewRubric_(p1), docs.images, answerText).replace(/^⚠️ /, ''),
-      gradedAt: new Date().toISOString(), error: '', outdated: false,
+      gradedAt: new Date().toISOString(), error: '', outdated: false, confirmed: false, confirmedAt: '',
     });
   } catch (e) {
     Object.assign(rec, { error: '채점 실패: ' + e.message, gradedAt: '' });
@@ -413,7 +413,29 @@ function cachedRoster_(courseId) {
 }
 
 // ===================== 클래스룸 반영 =====================
-function app_push(courseId, workId, subIds) {
+/**
+ * "채점 완료"(AI 채점 + 교사 확인) 체크. on=true면 완료, false면 해제.
+ * 완료 처리하면 그 학생의 "검토 필요" 표시도 함께 해제됩니다(교사가 확인했으므로).
+ * 채점하지 않았거나 세부항목이 바뀌어 다시 채점이 필요한 학생은 완료 처리할 수 없습니다.
+ */
+function app_setConfirmed(courseId, workId, subIds, on) {
+  assertAccess_();
+  const ids = (Array.isArray(subIds) ? subIds : [subIds]).map(String);
+  return updateProject_(courseId, workId, p => {
+    const views = [], skipped = [];
+    ids.forEach(id => {
+      const r = p.results[id];
+      if (!r || !r.gradedAt) { skipped.push({ id, why: '아직 채점하지 않았습니다' }); return; }
+      if (on && r.outdated) { skipped.push({ id, why: '세부항목이 바뀌어 다시 채점이 필요합니다' }); return; }
+      r.confirmed = !!on; r.confirmedAt = on ? new Date().toISOString() : '';
+      if (on) r.review = '';
+      views.push(studentView_(p, id, { sid: r.sid, name: r.name }));
+    });
+    return { views, skipped };
+  });
+}
+
+function app_push(courseId, workId, subIds, onlyConfirmed) {
   assertAccess_();
   const work = Classroom.Courses.CourseWork.get(courseId, workId);
   if (!work.maxPoints) throw new Error('이 과제에 만점(점수)이 설정되어 있지 않습니다. 클래스룸에서 점수를 설정하세요.');
@@ -427,6 +449,7 @@ function app_push(courseId, workId, subIds) {
     if (only && !only.has(subId)) continue;
     const r = p.results[subId];
     if (!r.gradedAt || r.review || r.outdated) { skipped++; continue; }
+    if (onlyConfirmed && !r.confirmed) { skipped++; continue; }   // '채점 완료'로 확인한 학생만
     const grade = Math.round(computeScore_(p, r).total * scale * 10) / 10;
     try {
       Classroom.Courses.CourseWork.StudentSubmissions.patch({ draftGrade: grade }, courseId, workId, subId, { updateMask: 'draftGrade' });
@@ -464,7 +487,7 @@ function app_export(courseId, workId) {
   p.rubric.forEach(q => (p.checklist[q.no] || []).forEach(c => checksAll.push(c)));
   const header = ['학번', '학생이름', '최종점수', '감점 사유'].concat(
     ...p.rubric.map(q => [`${q.no}. ${q.name} 점수`].concat((p.checklist[q.no] || []).map(c => `${c.id} ${c.label} (${c.points})`))),
-    ['종합피드백', '검토 필요']);
+    ['종합피드백', '검토 필요', '채점 상태']);
   const rows = Object.values(p.results).filter(r => r.gradedAt).map(r => {
     const c = computeScore_(p, r);
     const row = [r.sid || '', r.name || '', c.total, c.deductions.map(d => `${d.id} ${d.label} -${d.points}`).join(' / ') || '감점 없음'];
@@ -472,7 +495,7 @@ function app_export(courseId, workId) {
       row.push(c.items.find(i => i.no === q.no).score);
       (p.checklist[q.no] || []).forEach(ck => row.push(r.checks && r.checks[ck.id] && r.checks[ck.id].met ? '✔' : '✘'));
     });
-    row.push(r.feedback || '', r.review || '');
+    row.push(r.feedback || '', r.review || '', r.outdated ? '다시 채점 필요' : (r.confirmed ? '채점 완료(AI+교사 확인)' : 'AI 채점만'));
     return row;
   }).sort((a, b) => {
     const ka = String(a[0] || '\uffff'), kb = String(b[0] || '\uffff');
@@ -599,6 +622,112 @@ function app_genItemChecklist(courseId, workId, item, unit) {
   return list;
 }
 
+// ===================== 루브릭 보관함 (저장해 두고 다른 수행평가에서 불러오기) =====================
+const LIB_FILE = '루브릭 보관함.json';
+const LIB_MAX = 50;
+
+function loadLib_() {
+  const it = dataFolder_().getFilesByName(LIB_FILE);
+  if (it.hasNext()) {
+    try { const o = JSON.parse(it.next().getBlob().getDataAsString('UTF-8')); if (o && Array.isArray(o.items)) return o; } catch (e) { }
+  }
+  return { items: [] };
+}
+function saveLib_(lib) {
+  const body = JSON.stringify(lib);
+  const it = dataFolder_().getFilesByName(LIB_FILE);
+  if (it.hasNext()) it.next().setContent(body); else dataFolder_().createFile(LIB_FILE, body, 'application/json');
+}
+function updateLib_(fn) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(30000);
+  try { const lib = loadLib_(); const ret = fn(lib); saveLib_(lib); return ret; } finally { lock.releaseLock(); }
+}
+
+/** 보관함·파일에서 온 루브릭 묶음을 검증하고 번호·세부항목 번호를 새로 붙인다 */
+function sanitizePack_(pack) {
+  if (!pack || !Array.isArray(pack.rubric) || !pack.rubric.length) throw new Error('루브릭 내용이 비어 있거나 형식이 맞지 않습니다.');
+  const src = pack.rubric.slice(0, 30);
+  const rubric = src.map((q, i) => ({
+    no: String(i + 1), name: String(q.name || `항목${i + 1}`).slice(0, 80), points: Number(q.points) || 0,
+    criteria: String(q.criteria || '').slice(0, 6000), model: String(q.model || '').slice(0, 3000),
+    evidence: (q.evidence || []).filter(t => EVIDENCE_TYPES.includes(t)),
+  }));
+  const bad = rubric.filter(q => !(q.points > 0));
+  if (bad.length) throw new Error(`배점이 없는 평가항목이 있습니다: ${bad.map(q => q.no + '번').join(', ')}`);
+  const cl = {};
+  src.forEach((q, i) => {
+    const list = (pack.checklist || {})[String(q.no)] || (pack.checklist || {})[String(i + 1)] || [];
+    cl[String(i + 1)] = list.filter(c => Number(c.points) > 0).slice(0, 80).map((c, j) => ({
+      id: `${i + 1}-${j + 1}`, label: String(c.label || '').replace(/[()]/g, '').slice(0, 16), desc: String(c.desc || c.label || '').slice(0, 500), points: Number(c.points),
+    }));
+  });
+  return {
+    rubric, checklist: cl, unit: Number(pack.unit) || 0, checkUnit: Number(pack.checkUnit) || 0,
+    imageMode: ['auto', 'on', 'off'].includes(pack.imageMode) ? pack.imageMode : 'auto', context: String(pack.context || '').slice(0, 2000),
+  };
+}
+
+/** 이 수행평가에 루브릭 묶음을 적용 (이미 채점한 학생은 "다시 채점 필요"로 표시) */
+function applyPack_(p, pack) {
+  const before = checklistSig_(p);
+  p.rubric = pack.rubric; p.checklist = pack.checklist;
+  p.unit = detectUnit_(p.rubric) || pack.unit;
+  if (pack.checkUnit) p.checkUnit = pack.checkUnit;
+  p.imageMode = pack.imageMode;
+  if (pack.context && !String(p.context || '').trim()) p.context = pack.context;   // 과제 설명은 비어 있을 때만 채움
+  markOutdated_(p, before);
+}
+
+function libSummary_(it) {
+  return {
+    id: it.id, name: it.name, savedAt: it.savedAt, items: it.pack.rubric.length,
+    total: it.pack.rubric.reduce((a, q) => a + q.points, 0),
+    checks: Object.keys(it.pack.checklist).reduce((a, k) => a + it.pack.checklist[k].length, 0),
+  };
+}
+
+function app_listRubricLib() {
+  assertAccess_();
+  return loadLib_().items.slice().sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt))).map(libSummary_);
+}
+
+/** 편집기에 보이는 루브릭·세부항목을 이름을 붙여 보관함에 저장 (같은 이름이면 덮어씀) */
+function app_saveRubricLib(courseId, workId, name, rubric, checklist) {
+  assertAccess_();
+  name = String(name || '').trim().slice(0, 60);
+  if (!name) throw new Error('저장할 이름을 입력해 주세요.');
+  const p = loadProject_(courseId, workId);
+  const pack = sanitizePack_({ rubric, checklist, unit: p.unit, checkUnit: p.checkUnit, imageMode: p.imageMode, context: p.context });
+  updateLib_(lib => {
+    const i = lib.items.findIndex(x => x.name === name);
+    const item = { id: i >= 0 ? lib.items[i].id : Utilities.getUuid(), name, savedAt: new Date().toISOString(), pack };
+    if (i >= 0) lib.items[i] = item;
+    else { if (lib.items.length >= LIB_MAX) throw new Error(`보관함은 ${LIB_MAX}개까지 저장할 수 있습니다. 안 쓰는 것을 지워 주세요.`); lib.items.push(item); }
+  });
+  return app_listRubricLib();
+}
+
+function app_loadRubricLib(courseId, workId, id) {
+  assertAccess_();
+  const it = loadLib_().items.find(x => x.id === id);
+  if (!it) throw new Error('보관함에서 찾을 수 없습니다. 목록을 새로고침해 주세요.');
+  return updateProject_(courseId, workId, p => { applyPack_(p, sanitizePack_(it.pack)); return projectView_(p); });
+}
+
+function app_deleteRubricLib(id) {
+  assertAccess_();
+  updateLib_(lib => { lib.items = lib.items.filter(x => x.id !== id); });
+  return app_listRubricLib();
+}
+
+/** 내려받았던 루브릭 파일(.json)을 이 수행평가에 적용 */
+function app_importRubric(courseId, workId, data) {
+  assertAccess_();
+  const pack = sanitizePack_(data);
+  return updateProject_(courseId, workId, p => { applyPack_(p, pack); return projectView_(p); });
+}
+
 function app_regenChecklist(courseId, workId, checkUnit) {
   assertAccess_();
   if (!loadProject_(courseId, workId).rubric.length) throw new Error('먼저 1. 평가 루브릭에서 파일을 골라 등록해 주세요.');
@@ -617,7 +746,7 @@ function checklistSig_(p) {
 }
 function markOutdated_(p, before) {
   if (checklistSig_(p) === before) return;
-  Object.keys(p.results).forEach(id => { if (p.results[id].gradedAt) p.results[id].outdated = true; });
+  Object.keys(p.results).forEach(id => { if (p.results[id].gradedAt) { p.results[id].outdated = true; p.results[id].confirmed = false; p.results[id].confirmedAt = ''; } });
 }
 
 /** 루브릭 전체 단계 점수·배점의 최대공약수 = 점수 단위 (예: 30·25·40 → 5) */

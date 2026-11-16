@@ -29,8 +29,9 @@
   /* ---------- 상단 ---------- */
   header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
   header h1 { font-size: 16px; margin: 0 8px 0 0; white-space: nowrap; }
-  header select { max-width: 200px; }
-  header button { padding: 6px 10px; white-space: nowrap; }
+  header select { max-width: 165px; }
+  @media (max-width: 1500px) { header h1 .ttl { display: none; } }
+  header button { padding: 6px 9px; white-space: nowrap; }
   .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f1f3f4; color: var(--muted); white-space: nowrap; }
   .badge.ok { background: var(--ok-weak); color: var(--ok); }
   .badge.bad { background: var(--bad-weak); color: var(--bad); }
@@ -44,7 +45,7 @@
 
   .imgopt { display: block; padding: 4px 0; cursor: pointer; }
   .imgopt input { margin-right: 6px; }
-  .acct { font-size: 12px; color: var(--muted); white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+  .acct { font-size: 12px; color: var(--muted); white-space: nowrap; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
   .acct a { color: var(--brand); margin-left: 6px; text-decoration: none; }
   .gate { max-width: 460px; margin: 14vh auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; text-align: center; line-height: 1.8; }
   .gate h2 { margin: 0 0 8px; }
@@ -73,6 +74,14 @@
   .bulkact { display: none; gap: 6px; flex-wrap: wrap; }
   .bulkact.on { display: flex; }
   .bulkact button { padding: 5px 9px; font-size: 12.5px; }
+  .done-btn { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+  .done-btn.on { background: var(--ok-weak); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+  .stu.done { background: #f3faf5; }
+  .stu.done.sel { background: var(--brand-weak); }
+  .confirm { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .confirm.on { background: var(--ok-weak); border-color: var(--ok); color: var(--ok); }
+  .confirm input { width: 17px; height: 17px; margin: 0; cursor: pointer; }
+  #filt { width: 100%; }
   .stu .sid { color: var(--muted); font-size: 12px; margin-right: 6px; }
   .stu .nm { font-weight: 500; }
   .stu .sub { font-size: 12px; color: var(--muted); display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
@@ -162,7 +171,7 @@
 <body>
 <div style="background:#fff8e1;color:#8a6100;font-size:12.5px;padding:6px 14px;text-align:center;border-bottom:1px solid #f0e0a8">👀 미리보기 — 샘플 데이터로 움직이는 화면입니다. 체크를 눌러 점수가 바뀌는지, ▶ 채점 시작을 눌러 보세요. (저장·전송 없음)</div>
 <header>
-  <h1>📝 수행평가 자동채점</h1>
+  <h1 title="수행평가 자동채점">📝 <span class="ttl">수행평가 자동채점</span></h1>
   <select id="course"><option>불러오는 중…</option></select>
   <select id="work" disabled><option>수업을 먼저 고르세요</option></select>
   <span id="workInfo" style="display:flex;gap:4px;flex-wrap:nowrap"></span>
@@ -171,6 +180,7 @@
   <button id="btnGrade" class="primary" disabled>▶ 채점 시작</button>
   <button id="btnStop" style="display:none">■ 멈춤</button>
   <button id="btnPush" disabled>⬆ 클래스룸 반영</button>
+  <label class="small" style="white-space:nowrap;cursor:pointer" title="'채점 완료'로 확인한 학생만 클래스룸에 반영"><input type="checkbox" id="onlyConf"> 완료만</label>
   <div class="menu">
     <button id="btnMore">⋯</button>
     <div class="menu-list" id="moreList">
@@ -191,8 +201,9 @@
     <div class="tools">
       <input type="text" id="search" placeholder="학번·이름 검색">
       <div class="stats" id="stats"></div>
+      <select id="filt" title="상태별로 걸러 보기"><option value="">전체 학생</option><option value="todo">미채점</option><option value="ai">AI 채점됨 · 교사 확인 전</option><option value="done">✔ 채점 완료</option><option value="review">검토 필요</option><option value="outdated">다시 채점 필요</option></select>
       <div class="bulk"><label><input type="checkbox" id="selAll"> 전체 선택</label><span class="small muted" id="selCount"></span></div>
-      <div class="bulkact" id="bulkAct"><button id="bRegrade">↻ 선택 학생 다시 채점</button><button id="bPush">⬆ 선택 학생 반영</button></div>
+      <div class="bulkact" id="bulkAct"><button id="bConfirm" title="AI 채점과 교사 확인을 마친 학생을 채점 완료로 표시">✔ 선택 학생 채점 완료</button><button id="bUnconfirm">☐ 완료 해제</button><button id="bRegrade">↻ 선택 학생 다시 채점</button><button id="bPush">⬆ 선택 학생 반영</button></div>
     </div>
     <div class="list" id="list"></div>
   </section>
@@ -207,6 +218,14 @@
 <!-- 루브릭·자료 -->
 <div class="modal" id="mRubric"><div class="dlg">
   <h2>📋 루브릭·자료 <button class="ghost" data-close>✕</button></h2>
+  <div class="sec">
+    <h4>📚 루브릭 보관함 <span class="opt">저장해 두었다가 다른 수행평가에서 불러와 쓰세요</span></h4>
+    <div class="row"><input type="text" id="libName" placeholder="저장할 이름 (예: 2학기 정보 수행평가 루브릭)" style="flex:1;min-width:200px"><button id="libSave">💾 현재 루브릭 저장</button></div>
+    <div id="libList" class="small muted" style="margin-top:8px">불러오는 중…</div>
+    <div class="row" style="margin-top:8px"><button id="libExport">⬇ 파일로 내려받기</button>
+      <label class="small muted">또는 파일에서 불러오기(자동 적용): <input type="file" id="libFile" accept=".json,application/json"></label></div>
+    <div class="st" id="libSt"></div>
+  </div>
   <div class="sec">
     <h4>1. 평가 루브릭 <span class="opt">필수 · <b>파일을 고르면 자동으로 등록됩니다</b> (PDF·Word·한글(hwpx)·엑셀·사진·텍스트)</span></h4>
     <input type="file" id="rf" accept=".pdf,.docx,.doc,.hwpx,.xlsx,.xls,.csv,.txt,.jpg,.jpeg,.png">
@@ -303,7 +322,7 @@
     '2': [C('2-1', '삽입 함수 구현', '삽입 연산을 함수로 정확하게 구현하였다.', 10), C('2-2', '삭제 함수 구현', '삭제 연산을 함수로 정확하게 구현하였다.', 10), C('2-3', '조회 함수 구현', '조회 연산을 함수로 정확하게 구현하였다.', 10), C('2-4', '오류 없는 실행', '코드가 오류 없이 실행된다.', 5)],
     '3': [C('3-1', '실행 결과 캡처', '실행 결과 화면을 캡처해 첨부하였다.', 10), C('3-2', '결과 해석', '실행 결과를 코드와 연결해 해석하였다.', 5), C('3-3', '다양한 입력 검증', '여러 입력값으로 동작을 검증하였다.', 5), C('3-4', '오류 자가 수정', '발견한 오류를 스스로 수정하였다.', 5)],
   };
-  let imageMode = 'auto'; let checkUnit = 5; let wsName = '클래스룸 배포 활동지 (정보과학_수행평가1_스택큐)'; let exName = '';
+  let lib = []; let imageMode = 'auto'; let checkUnit = 5; let wsName = '클래스룸 배포 활동지 (정보과학_수행평가1_스택큐)'; let exName = '';
   const project = () => ({ imageMode, readImages: imageMode === 'on' || (imageMode === 'auto' && rubric.some(q => q.evidence.length)), context: '고1 정보 - 스택과 큐를 함수로 구현하기', unit: 5, total: 100, rubric, checklist,
     worksheet: { name: wsName, chars: 2483 }, example: { name: exName, chars: exName ? 1800 : 0, images: 0 }, checkUnit });
 
@@ -318,7 +337,7 @@
       feedback: '자료구조를 문제 상황에 맞게 잘 골랐어요. 삭제 함수와 실행 결과 화면까지 꼭 넣고, 여러 입력으로 검증해 보세요.' },
     s2: { sid: '20210', name: '이서연', graded: true, review: '', checks: ck(mk(['3-3']), { '3-3': '입력값 한 가지만 검증' }), feedback: '모든 함수를 정확히 구현했어요. 다양한 입력으로 검증하는 부분만 보완하면 완벽해요.' },
     s3: { sid: '20211', name: '박민준', graded: true, review: '', checks: ck(mk(['1-3','1-4','2-3','2-4','3-2','3-3','3-4']), { '1-3': '삭제 함수 설계 설명 없음', '1-4': '조회 함수 설계 없음', '2-3': '조회 함수 구현 없음' }), feedback: '삽입 기능은 잘 구현했어요. 삭제·조회 함수도 설계하고 구현해 보세요.' },
-    s4: { sid: '20212', name: '최하은', graded: true, review: '', checks: ck(mk([]), {}), feedback: '모든 항목을 훌륭하게 해냈어요!' },
+    s4: { sid: '20212', name: '최하은', graded: true, confirmed: true, review: '', checks: ck(mk([]), {}), feedback: '모든 항목을 훌륭하게 해냈어요!' },
     s5: { sid: '20213', name: '정우진', graded: false, state: 'TURNED_IN' },
     s6: { sid: '20214', name: '한지민', graded: false, state: 'TURNED_IN' },
     s7: { sid: '20215', name: '오세훈', graded: false, state: 'CREATED' },
@@ -330,7 +349,7 @@
     if (!r.graded) { v.status = 'todo'; return v; }
     let total = 0; const items = [], deds = [];
     rubric.forEach(q => { let sc = 0; checklist[q.no].forEach(c => { if ((r.checks[c.id] || { met: false }).met) sc += c.points; else deds.push({ id: c.id, label: c.label, points: c.points }); }); total += sc; items.push({ no: q.no, name: q.name, points: q.points, score: sc }); });
-    return Object.assign(v, { total, items, deductions: deds, status: r.review ? 'review' : 'done', review: r.review, feedback: r.feedback, checks: r.checks,
+    return Object.assign(v, { total, items, deductions: deds, confirmed: !!r.confirmed, status: r.review ? 'review' : 'done', review: r.review, feedback: r.feedback, checks: r.checks,
       rationale: { '1': '스택·큐 선정과 설계가 구체적입니다.', '2': '삽입·조회는 구현했으나 삭제 구현을 확인할 수 없습니다.', '3': '검증 입력이 한 가지입니다.' }, itemNotes: {}, pushed: '' });
   }
   const graph = '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="240"><rect width="420" height="240" fill="#fff" stroke="#ccc"/><text x="210" y="22" text-anchor="middle" font-size="14" font-family="sans-serif">주문 처리 시간</text><line x1="50" y1="200" x2="390" y2="200" stroke="#333"/><line x1="50" y1="40" x2="50" y2="200" stroke="#333"/><polyline fill="none" stroke="#1a73e8" stroke-width="3" points="60,170 130,140 200,120 270,90 340,60"/><text x="220" y="225" text-anchor="middle" font-size="12" font-family="sans-serif">주문 수</text><text x="14" y="120" font-size="12" font-family="sans-serif" transform="rotate(-90 14 120)">시간</text></svg>';
@@ -363,6 +382,12 @@
     app_clearExample: () => { exName = ''; return project(); },
     app_regenChecklist: (c, w, u) => { checkUnit = u || checkUnit; rubric.forEach(q => { const n = Math.ceil(q.points / checkUnit); checklist[q.no] = Array.from({ length: n }, (_, i) => ({ id: q.no + '-' + (i + 1), label: '세부 요건 ' + (i + 1), desc: q.name + ' — 요건 ' + (i + 1), points: checkUnit })); }); return project(); },
     app_genItemChecklist: (c, w, item, u) => { const unit = u || 5, n = Math.ceil(item.points / unit); return Array.from({ length: n }, (_, i) => ({ label: '생성 요건 ' + (i + 1), desc: item.name + ' — 요건 ' + (i + 1), points: unit })); },
+    app_listRubricLib: () => lib.slice().reverse().map(x => ({ id: x.id, name: x.name, savedAt: x.savedAt, items: x.rubric.length, total: x.rubric.reduce((t, q) => t + q.points, 0), checks: Object.values(x.checklist).reduce((t, l) => t + l.length, 0) })),
+    app_saveRubricLib: (c, w, name, rb, cl) => { const i = lib.findIndex(x => x.name === name); const it = { id: i >= 0 ? lib[i].id : 'L' + Date.now(), name, savedAt: new Date().toISOString(), rubric: JSON.parse(JSON.stringify(rb)), checklist: JSON.parse(JSON.stringify(cl)) }; if (i >= 0) lib[i] = it; else lib.push(it); return api.app_listRubricLib(); },
+    app_loadRubricLib: (c, w, id) => { const it = lib.find(x => x.id === id); rubric.length = 0; it.rubric.forEach(q => rubric.push(q)); Object.keys(checklist).forEach(k => delete checklist[k]); Object.assign(checklist, JSON.parse(JSON.stringify(it.checklist))); return project(); },
+    app_deleteRubricLib: (id) => { lib = lib.filter(x => x.id !== id); return api.app_listRubricLib(); },
+    app_importRubric: (c, w, d) => { rubric.length = 0; d.rubric.forEach((q, i) => rubric.push(Object.assign({}, q, { no: String(i + 1), evidence: q.evidence || [] }))); Object.keys(checklist).forEach(k => delete checklist[k]); d.rubric.forEach((q, i) => { checklist[String(i + 1)] = ((d.checklist || {})[q.no] || []).map((c, j) => ({ id: (i + 1) + '-' + (j + 1), label: c.label, desc: c.desc, points: c.points })); }); return project(); },
+    app_setConfirmed: (c, w, ids, on) => { const views = [], skipped = []; ids.forEach(id => { const r = R[id]; if (!r.graded) { skipped.push({ id, why: '아직 채점하지 않았습니다' }); return; } r.confirmed = !!on; if (on) r.review = ''; views.push(view(id)); }); return { views, skipped }; },
     app_saveRubric: (c, w, rb, cl, u) => { if (u) checkUnit = u; return project(); },
     app_saveSettings: () => ({}),
     app_recentDocs: () => [{ id: 'd1', name: '정보과학_수행평가1_스택큐 (활동지)' }],
@@ -419,6 +444,9 @@ const BUSY_MAP = {
   app_uploadWorksheet: ['빈 활동지를 읽는 중', '파일 크기에 따라 10~30초 걸립니다', 20],
   app_saveRubric: ['루브릭·세부항목을 저장하는 중', '보통 몇 초 걸립니다', 6],
   app_genItemChecklist: ['세부항목을 만드는 중', '보통 20~40초 걸립니다', 30],
+  app_saveRubricLib: ['루브릭을 보관함에 저장하는 중', '보통 몇 초 걸립니다', 6],
+  app_loadRubricLib: ['보관함에서 루브릭을 불러오는 중', '보통 몇 초 걸립니다', 6],
+  app_importRubric: ['루브릭 파일을 적용하는 중', '보통 몇 초 걸립니다', 6],
   app_export: ['시트로 내보내는 중', '보통 10초 안팎입니다', 12],
   app_push: ['클래스룸에 점수를 넣는 중', '학생 수에 따라 10~40초 걸립니다', 25],
   app_postComments: ['피드백 댓글을 다는 중', '학생 수에 따라 10~40초 걸립니다', 25],
@@ -538,7 +566,7 @@ function openWork() {
     $('workInfo').innerHTML =
       (d.work.state === 'DRAFT' ? '<span class="badge warn">초안 — 게시 후 채점</span> ' : '') +
       (d.work.maxPoints ? `<span class="badge">만점 ${d.work.maxPoints}</span> ` : '<span class="badge warn">만점 미설정</span> ') +
-      (d.work.api ? '<span class="badge blue">⭐ 점수 자동 반영</span>' : '<span class="badge" title="클래스룸 화면에서 만든 과제는 점수를 직접 입력해야 합니다">점수는 직접 입력</span>') +
+      (d.work.api ? '<span class="badge blue" title="이 앱으로 만든 과제라 점수를 클래스룸에 자동으로 넣을 수 있습니다">⭐ 자동 반영</span>' : '<span class="badge" title="클래스룸 화면에서 만든 과제는 점수를 직접 입력해야 합니다">직접 입력</span>') +
       ' <span id="imgBadge" class="badge" style="cursor:pointer"></span>';
     updateImgBadge(); $('imgBadge').onclick = openRubric;
     ['btnRubric', 'btnGrade', 'btnPush'].forEach(id => $(id).disabled = false);
@@ -551,17 +579,33 @@ function openWork() {
 
 /* ---------- 학생 목록 ---------- */
 $('search').oninput = renderList;
+/** 검색어와 상태 필터를 적용한 보이는 학생 목록 */
+function visibleList() {
+  const q = $('search').value.trim(), f = $('filt').value;
+  return S.order.map(id => S.students[id]).filter(s => {
+    if (q && !(s.sid + ' ' + s.name).includes(q)) return false;
+    if (f === 'todo') return !s.graded;
+    if (f === 'ai') return s.graded && !s.confirmed;
+    if (f === 'done') return !!s.confirmed;
+    if (f === 'review') return s.graded && !!s.review;
+    if (f === 'outdated') return !!s.outdated;
+    return true;
+  });
+}
+$('filt').onchange = renderList;
 function renderList() {
-  const q = $('search').value.trim();
-  const list = S.order.map(id => S.students[id]).filter(s => !q || (s.sid + ' ' + s.name).includes(q));
+  const list = visibleList();
   const graded = S.order.map(id => S.students[id]).filter(s => s.graded);
+  const confirmed = graded.filter(s => s.confirmed).length;
   const reviews = graded.filter(s => s.review).length;
   const avg = graded.length ? (graded.reduce((a, s) => a + s.total, 0) / graded.length).toFixed(1) : '-';
   const max = S.project ? S.project.total : 0;
-  $('stats').innerHTML = `<span class="badge">학생 ${S.order.length}</span><span class="badge ok">채점 ${graded.length}</span>` +
+  $('stats').innerHTML = `<span class="badge">학생 ${S.order.length}</span><span class="badge ok" title="AI 채점이 끝난 학생">채점 ${graded.length}</span>` +
+    `<span class="badge ok" title="AI 채점 + 교사 확인까지 끝난 학생" style="background:${confirmed === graded.length && graded.length ? 'var(--ok)' : 'var(--ok-weak)'};color:${confirmed === graded.length && graded.length ? '#fff' : 'var(--ok)'}">✔ 완료 ${confirmed}/${graded.length}</span>` +
     (reviews ? `<span class="badge bad">검토 ${reviews}</span>` : '') + `<span class="badge blue">평균 ${avg}${max ? ' / ' + max : ''}</span>`;
   $('list').innerHTML = list.map(s => {
     const badges = [];
+    if (s.graded) badges.push(`<button class="done-btn ${s.confirmed ? 'on' : ''}" data-done="${esc(s.subId)}" ${s.outdated ? 'disabled' : ''} title="${s.outdated ? '세부항목이 바뀌어 다시 채점해야 완료 처리할 수 있습니다' : (s.confirmed ? '채점 완료 — 누르면 해제' : 'AI 채점을 확인했으면 눌러 채점 완료로 표시')}">${s.confirmed ? '☑ 채점 완료' : '☐ 완료 확인'}</button>`);
     if (s.state && s.state !== 'TURNED_IN' && s.state !== 'RETURNED') badges.push('<span class="badge">미제출</span>');
     if (s.status === 'error') badges.push('<span class="badge bad">채점 실패</span>');
     if (s.review) badges.push('<span class="badge bad">검토 필요</span>');
@@ -569,15 +613,19 @@ function renderList() {
     if (s.outdated) badges.push('<span class="badge warn" title="세부항목이 바뀌어 다시 채점해야 점수가 맞습니다">다시 채점 필요</span>');
     if (s.pushed && s.pushed.startsWith('✅')) badges.push('<span class="badge ok">반영됨</span>');
     if (s.deductions && s.deductions.length) badges.push(`<span class="badge">감점 ${s.deductions.length}</span>`);
-    return `<div class="stu ${s.subId === S.sel ? 'sel' : ''} ${s.review ? 'review' : ''}" data-id="${esc(s.subId)}">
+    return `<div class="stu ${s.subId === S.sel ? 'sel' : ''} ${s.review ? 'review' : ''} ${s.confirmed ? 'done' : ''}" data-id="${esc(s.subId)}">
       <input type="checkbox" class="pick" data-pick="${esc(s.subId)}" ${S.checked.has(s.subId) ? 'checked' : ''} title="선택">
       <div><div class="nm"><span class="sid">${esc(s.sid || '')}</span>${esc(s.name)}</div><div class="sub">${badges.join('')}</div></div>
       <div class="sc">${s.graded ? esc(s.total) : '<span class="muted small">-</span>'}</div></div>`;
-  }).join('') || '<div class="empty small">학생이 없습니다.</div>';
+  }).join('') || '<div class="empty small">조건에 맞는 학생이 없습니다.</div>';
   $('list').querySelectorAll('.stu').forEach(el => el.onclick = () => select(el.dataset.id));
   $('list').querySelectorAll('[data-pick]').forEach(el => {
     el.onclick = e => e.stopPropagation();
     el.onchange = () => { if (el.checked) S.checked.add(el.dataset.pick); else S.checked.delete(el.dataset.pick); updateBulk(list); };
+  });
+  $('list').querySelectorAll('[data-done]').forEach(el => el.onclick = e => {
+    e.stopPropagation();
+    const s = S.students[el.dataset.done]; toggleConfirm([el.dataset.done], !s.confirmed);
   });
   updateBulk(list);
 }
@@ -593,11 +641,12 @@ function updateBulk(visible) {
   $('bulkAct').classList.toggle('on', S.checked.size > 0);
 }
 $('selAll').onchange = () => {
-  const q = $('search').value.trim();
-  const vis = S.order.map(id => S.students[id]).filter(s => !q || (s.sid + ' ' + s.name).includes(q)).map(s => s.subId);
+  const vis = visibleList().map(s => s.subId);
   vis.forEach(id => { if ($('selAll').checked) S.checked.add(id); else S.checked.delete(id); });
   renderList();
 };
+$('bConfirm').onclick = () => toggleConfirm([...S.checked], true);
+$('bUnconfirm').onclick = () => toggleConfirm([...S.checked], false);
 $('bRegrade').onclick = () => {
   const ids = [...S.checked].filter(id => { const s = S.students[id]; return s && s.state && s.state !== 'CREATED' && s.state !== 'RECLAIMED_BY_STUDENT'; });
   if (!ids.length) return toast('선택한 학생 중 제출한 학생이 없습니다.');
@@ -679,6 +728,7 @@ function renderDetail() {
         <input type="text" class="sidin" id="sidIn" value="${esc(s.sid)}" title="학번(직접 수정 가능)">
         <div class="who">${esc(s.name)}</div>
         <div class="total">${esc(s.total)}<small> / ${esc(p.total)}</small></div>
+        <label class="confirm ${s.confirmed ? 'on' : ''}" title="AI 채점 결과를 교사가 확인했으면 체크하세요. 목록에 '채점 완료'로 표시됩니다."><input type="checkbox" id="confirmBox" ${s.confirmed ? 'checked' : ''} ${s.outdated ? 'disabled' : ''}> 채점 완료<span class="small" style="font-weight:400">(AI + 교사 확인)</span></label>
         <span class="spacer"></span>
         <span class="small" id="saveMsg"></span>
         <button onclick="gradeList([S.sel])">↻ 다시 채점</button>
@@ -698,6 +748,7 @@ function renderDetail() {
 
   d.querySelectorAll('[data-check]').forEach(el => el.onchange = () => toggleCheck(S.sel, el.dataset.check, el.checked));
   showSaveMsg();
+  $('confirmBox').onchange = () => toggleConfirm([S.sel], $('confirmBox').checked);
   d.querySelectorAll('[data-score]').forEach(el => el.onchange = () => {
     run('app_setScore', S.courseId, S.workId, S.sel, el.dataset.score, Number(el.value)).then(updateStudent).catch(fail);
   });
@@ -744,6 +795,28 @@ function recomputeStudent(s) {
     total += sc; items.push({ no: q.no, name: q.name, points: q.points, score: sc });
   });
   s.total = total; s.items = items; s.deductions = deds;
+}
+function toggleConfirm(ids, on) {
+  const targets = ids.filter(id => { const s = S.students[id]; return s && s.graded && !(on && s.outdated); });
+  if (!targets.length) return toast(on ? '채점 완료로 표시할 수 있는 학생이 없습니다. (채점하지 않았거나 다시 채점이 필요한 학생은 제외됩니다)' : '해제할 학생이 없습니다.');
+  const skippedN = ids.length - targets.length;
+  const prev = {};
+  targets.forEach(id => { const s = S.students[id]; prev[id] = { confirmed: !!s.confirmed, review: s.review, status: s.status }; s.confirmed = on; if (on) { s.review = ''; if (s.status === 'review') s.status = 'done'; } });
+  rerenderKeepScroll();
+  CHK.pending++; showSaveMsg('저장 중…');
+  CHK.chain = CHK.chain
+    .then(() => run('app_setConfirmed', S.courseId, S.workId, targets, on))
+    .then(r => {
+      if (CHK.pending === 1) (r.views || []).forEach(updateStudent);
+      const sk = (r.skipped || []).length;
+      if (sk) toast(`${sk}명은 제외했습니다: ${r.skipped[0].why}`, 6000);
+    }, e => {
+      targets.forEach(id => { const s = S.students[id]; if (s) Object.assign(s, prev[id]); });
+      rerenderKeepScroll();
+      showSaveMsg('저장 실패 — 되돌렸습니다: ' + e.message, 'bad'); fail(e);
+    })
+    .then(() => { CHK.pending--; if (CHK.pending === 0 && S.saveCls !== 'bad') showSaveMsg('✔ 저장됨 ' + stamp(), 'ok'); });
+  toast((on ? '✔ 채점 완료로 표시했습니다' : '채점 완료를 해제했습니다') + ` (${targets.length}명)` + (skippedN ? ` · ${skippedN}명 제외` : ''), 3000);
 }
 function rerenderKeepScroll() { const sc = $('detail').scrollTop; renderList(); renderDetail(); $('detail').scrollTop = sc; }
 function toggleCheck(subId, cid, met) {
@@ -807,16 +880,21 @@ async function gradeList(ids) {
 }
 
 /* ---------- 클래스룸 반영 ---------- */
+try { $('onlyConf').checked = localStorage.getItem('onlyConf') === '1'; } catch (e) { }
+$('onlyConf').onchange = () => { try { localStorage.setItem('onlyConf', $('onlyConf').checked ? '1' : '0'); } catch (e) { } };
 $('btnPush').onclick = () => {
   const graded = S.order.map(id => S.students[id]).filter(s => s.graded);
-  const reviews = graded.filter(s => s.review).length;
   if (!graded.length) return toast('채점한 학생이 없습니다.');
-  if (!confirm(`채점한 ${graded.length}명 중 검토 필요 ${reviews}명을 뺀 나머지의 점수를 클래스룸에 '임시 점수'로 넣습니다.\n학생에게는 클래스룸에서 '반환'하기 전까지 보이지 않습니다. 진행할까요?`)) return;
+  const ok = graded.filter(s => !s.review && !s.outdated);
+  const only = $('onlyConf').checked;
+  const targets = only ? ok.filter(s => s.confirmed) : ok;
+  if (!targets.length) return toast(only ? "'채점 완료'로 확인한 학생이 없습니다. 학생 목록에서 ☐ 완료 확인을 눌러 주세요." : '반영할 수 있는 학생이 없습니다.');
+  if (!confirm(`채점한 ${graded.length}명 중 ${only ? "'채점 완료'로 확인한" : '검토 필요·다시 채점 필요를 뺀'} ${targets.length}명의 점수를 클래스룸에 '임시 점수'로 넣습니다.\n학생에게는 클래스룸에서 '반환'하기 전까지 보이지 않습니다. 진행할까요?`)) return;
   pushGrades(null);
 };
 function pushGrades(ids) {
   
-  run('app_push', S.courseId, S.workId, ids).then(r => {
+  run('app_push', S.courseId, S.workId, ids, $('onlyConf').checked).then(r => {
     if (r.blocked) alert('이 과제는 클래스룸 화면에서 직접 만든 과제라 점수 자동 반영이 막혀 있습니다(구글 정책).\n\n• 이번 과제: 앱의 점수를 보고 클래스룸에 직접 입력하거나 ⋯ › 시트로 내보내기를 이용하세요.\n• 다음 과제부터: ⋯ › 활동지 사본 배포 과제 만들기로 과제를 만들면 자동 반영됩니다.');
     else toast(`반영 ${r.pushed}명 / 건너뜀 ${r.skipped}명` + (r.scale !== 1 ? ` (루브릭 ${r.rubricTotal}점 → 만점 ${r.maxPoints}점 환산)` : ''), 7000);
     openWork();
@@ -839,7 +917,7 @@ $('moreList').querySelectorAll('button').forEach(b => b.onclick = () => {
 
 /* ---------- 루브릭·자료 창 ---------- */
 $('btnRubric').onclick = openRubric;
-function openRubric() { renderMaterials(); renderRubricEditor(); openModal('mRubric'); }
+function openRubric() { renderMaterials(); renderRubricEditor(); $('libName').value = $('libName').value || (S.work && S.work.title) || ''; refreshLib(); openModal('mRubric'); }
 
 function renderMaterials() {
   const p = S.project;
@@ -930,6 +1008,83 @@ function updateImgBadge() {
   el.textContent = S.project.readImages ? '🖼 이미지 읽음' : '📝 글만 평가';
   el.title = '📋 루브릭·자료 › 이미지 읽기에서 바꿀 수 있습니다';
 }
+/* ---------- 루브릭 보관함 ---------- */
+let LIB = [];
+const fmtDate = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function renderLib() {
+  $('libList').innerHTML = LIB.length
+    ? LIB.map(x => `<div class="row" style="padding:6px 0;border-top:1px solid var(--line)">
+        <div style="flex:1;min-width:0"><b>${esc(x.name)}</b><div class="small muted">평가항목 ${x.items}개 · ${x.total}점 · 세부항목 ${x.checks}개 · ${esc(fmtDate(x.savedAt))} 저장</div></div>
+        <button data-libload="${esc(x.id)}">불러오기</button><button class="ghost" data-libdel="${esc(x.id)}" title="삭제">🗑</button></div>`).join('')
+    : '<span class="muted">아직 저장한 루브릭이 없습니다. 위에서 이름을 쓰고 [현재 루브릭 저장]을 눌러 보세요.</span>';
+  $('libList').querySelectorAll('[data-libload]').forEach(b => b.onclick = () => loadLib(b.dataset.libload));
+  $('libList').querySelectorAll('[data-libdel]').forEach(b => b.onclick = () => delLib(b.dataset.libdel));
+}
+function refreshLib() {
+  $('libList').textContent = '불러오는 중…';
+  return run('app_listRubricLib').then(l => { LIB = l; renderLib(); }).catch(e => { $('libList').textContent = '보관함을 불러오지 못했습니다: ' + e.message; });
+}
+$('libSave').onclick = () => {
+  const name = $('libName').value.trim();
+  if (!name) return setSt('libSt', '저장할 이름을 입력해 주세요.', 'bad');
+  if (!ED || !ED.rubric.length) return setSt('libSt', '저장할 루브릭이 없습니다. 먼저 루브릭을 등록해 주세요.', 'bad');
+  if (LIB.some(x => x.name === name) && !confirm(`보관함에 "${name}" 이름이 이미 있습니다. 덮어쓸까요?`)) return;
+  $('libSave').disabled = true; setSt('libSt', '저장하는 중…');
+  run('app_saveRubricLib', S.courseId, S.workId, name, ED.rubric, ED.checklist).then(l => {
+    LIB = l; renderLib(); $('libSave').disabled = false;
+    setSt('libSt', `✅ 보관함에 저장했습니다 (${stamp()}) — "${name}"` + (ED.dirty ? '\n※ 편집기에서 고친 내용(아직 [수정 내용 저장] 전)까지 포함해 저장했습니다.' : ''), 'ok');
+  }).catch(e => { $('libSave').disabled = false; setSt('libSt', '저장 실패: ' + e.message, 'bad'); });
+};
+function applyLoaded(p, msg) {
+  S.project = p; renderMaterials(); renderRubricEditor();
+  setSt('libSt', msg + '\n아래에서 루브릭과 세부항목을 확인하세요.', 'ok');
+  return refreshWork().then(() => {
+    const out = S.order.filter(id => S.students[id].outdated).length;
+    if (out) toast(`루브릭이 바뀌어 ${out}명은 다시 채점해야 점수가 맞습니다. (▶ 채점 시작)`, 8000);
+  });
+}
+function loadLib(id) {
+  const x = LIB.find(l => l.id === id); if (!x) return;
+  const has = S.project.rubric.length;
+  if (!confirm(`"${x.name}" (평가항목 ${x.items}개, ${x.total}점)을 불러옵니다.` + (has ? '\n지금 이 수행평가의 루브릭과 세부항목은 이것으로 바뀌고, 저장하지 않은 편집 내용은 사라집니다. 이미 채점한 학생은 다시 채점해야 합니다.' : '') + '\n계속할까요?')) return;
+  setSt('libSt', '불러오는 중…');
+  run('app_loadRubricLib', S.courseId, S.workId, id).then(p => applyLoaded(p, `✅ "${x.name}"을 불러와 적용했습니다 (${stamp()})`))
+    .catch(e => setSt('libSt', '불러오기 실패: ' + e.message, 'bad'));
+}
+function delLib(id) {
+  const x = LIB.find(l => l.id === id); if (!x) return;
+  if (!confirm(`보관함에서 "${x.name}"을 삭제할까요? (이 수행평가에 이미 적용한 루브릭은 그대로입니다)`)) return;
+  run('app_deleteRubricLib', id).then(l => { LIB = l; renderLib(); setSt('libSt', '삭제했습니다.'); }).catch(e => setSt('libSt', '삭제 실패: ' + e.message, 'bad'));
+}
+/* 파일로 내려받기 / 파일에서 불러오기 (다른 선생님과 주고받기·백업) */
+$('libExport').onclick = () => {
+  if (!ED || !ED.rubric.length) return setSt('libSt', '내려받을 루브릭이 없습니다.', 'bad');
+  const p = S.project;
+  const data = { app: 'classroomgrade', version: 1, name: $('libName').value.trim() || (S.work && S.work.title) || '루브릭',
+    rubric: ED.rubric.map(q => ({ no: q.no, name: q.name, points: q.points, criteria: q.criteria, model: q.model || '', evidence: q.evidence || [] })),
+    checklist: ED.checklist, unit: p.unit, checkUnit: p.checkUnit, imageMode: p.imageMode, context: p.context };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  a.download = '루브릭_' + data.name.replace(/[\\/:*?"<>|]/g, '_') + '.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  setSt('libSt', '⬇ 파일로 내려받았습니다. (' + a.download + ')', 'ok');
+};
+$('libFile').onchange = () => {
+  const f = $('libFile').files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    let data;
+    try { data = JSON.parse(String(r.result)); } catch (e) { $('libFile').value = ''; return setSt('libSt', '루브릭 파일(.json)이 아니거나 내용이 깨졌습니다.', 'bad'); }
+    if (!data || !Array.isArray(data.rubric)) { $('libFile').value = ''; return setSt('libSt', '이 앱에서 내려받은 루브릭 파일이 아닙니다.', 'bad'); }
+    const n = data.rubric.length, tot = data.rubric.reduce((a, q) => a + (Number(q.points) || 0), 0);
+    if (!confirm(`"${f.name}" (평가항목 ${n}개, ${tot}점)을 이 수행평가에 적용합니다.` + (S.project.rubric.length ? '\n지금 루브릭과 세부항목은 바뀌고, 저장하지 않은 편집 내용은 사라집니다. 이미 채점한 학생은 다시 채점해야 합니다.' : '') + '\n계속할까요?')) { $('libFile').value = ''; return; }
+    setSt('libSt', '파일을 적용하는 중…');
+    run('app_importRubric', S.courseId, S.workId, data).then(p => { $('libFile').value = ''; return applyLoaded(p, `✅ 파일을 적용했습니다 (${stamp()}) — ${f.name}`); })
+      .catch(e => { $('libFile').value = ''; setSt('libSt', '적용 실패: ' + e.message, 'bad'); });
+  };
+  r.onerror = () => setSt('libSt', '파일을 읽지 못했습니다.', 'bad');
+  r.readAsText(f);
+};
 $('ctxSave').onclick = () => run('app_saveContext', S.courseId, S.workId, $('ctx').value).then(p => { S.project = p; toast('저장했습니다.'); }).catch(fail);
 
 /* 루브릭·세부항목 편집기 */
