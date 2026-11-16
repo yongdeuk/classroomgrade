@@ -594,6 +594,7 @@ function renderDetail() {
         <div class="who">${esc(s.name)}</div>
         <div class="total">${esc(s.total)}<small> / ${esc(p.total)}</small></div>
         <span class="spacer"></span>
+        <span class="small" id="saveMsg"></span>
         <button onclick="gradeList([S.sel])">↻ 다시 채점</button>
       </div>
       ${deds}
@@ -609,10 +610,8 @@ function renderDetail() {
       <textarea id="fb" rows="3">${esc(s.feedback)}</textarea>
       <div class="row" style="justify-content:flex-end;margin-top:6px"><button id="fbSave">피드백 저장</button></div></div>`;
 
-  d.querySelectorAll('[data-check]').forEach(el => el.onchange = () => {
-    el.disabled = true;
-    run('app_setCheck', S.courseId, S.workId, S.sel, el.dataset.check, el.checked).then(updateStudent).catch(e => { el.checked = !el.checked; el.disabled = false; fail(e); });
-  });
+  d.querySelectorAll('[data-check]').forEach(el => el.onchange = () => toggleCheck(S.sel, el.dataset.check, el.checked));
+  showSaveMsg();
   d.querySelectorAll('[data-score]').forEach(el => el.onchange = () => {
     run('app_setScore', S.courseId, S.workId, S.sel, el.dataset.score, Number(el.value)).then(updateStudent).catch(fail);
   });
@@ -635,7 +634,49 @@ function updateStudent(v) {
   S.students[v.subId] = Object.assign({}, old, v, { state: old.state || v.state });
   if (!S.order.includes(v.subId)) S.order.push(v.subId);
   renderList();
-  if (S.sel === v.subId) renderDetail();
+  if (S.sel === v.subId) { const sc = $('detail').scrollTop; renderDetail(); $('detail').scrollTop = sc; }   // 스크롤 위치 유지
+}
+
+/* ---------- 교사가 체크를 바꾸면 즉시 점수 반영 + 뒤에서 순서대로 저장 ---------- */
+const CHK = { chain: Promise.resolve(), pending: 0 };
+function showSaveMsg(text, cls) {
+  if (text !== undefined) { S.saveMsg = text; S.saveCls = cls || ''; }
+  const el = $('saveMsg'); if (!el) return;
+  el.textContent = S.saveMsg || '';
+  el.style.color = S.saveCls === 'bad' ? 'var(--bad)' : (S.saveCls === 'ok' ? 'var(--ok)' : 'var(--muted)');
+}
+/** 서버와 같은 규칙으로 항목 점수·최종점수·감점 사유를 다시 계산 */
+function recomputeStudent(s) {
+  const p = S.project; let total = 0; const items = [], deds = [];
+  p.rubric.forEach(q => {
+    const checks = p.checklist[q.no] || []; let sc;
+    if (checks.length) {
+      sc = 0;
+      checks.forEach(c => { if (s.checks && s.checks[c.id] && s.checks[c.id].met) sc += c.points; else deds.push({ id: c.id, label: c.label, points: c.points }); });
+      sc = Math.min(q.points, sc);
+    } else { const o = (s.items || []).find(i => i.no === q.no); sc = o ? o.score : 0; }
+    total += sc; items.push({ no: q.no, name: q.name, points: q.points, score: sc });
+  });
+  s.total = total; s.items = items; s.deductions = deds;
+}
+function rerenderKeepScroll() { const sc = $('detail').scrollTop; renderList(); renderDetail(); $('detail').scrollTop = sc; }
+function toggleCheck(subId, cid, met) {
+  const s = S.students[subId]; if (!s || !S.project) return;
+  s.checks = s.checks || {};
+  const had = s.checks[cid], prev = had ? !!had.met : false;
+  if (!had) s.checks[cid] = { met: false, ai: false, reason: '' };
+  s.checks[cid].met = met; recomputeStudent(s);                 // 1) 화면은 바로 바꾸고
+  if (S.sel === subId) rerenderKeepScroll(); else renderList();
+  CHK.pending++; showSaveMsg('저장 중…');
+  CHK.chain = CHK.chain                                           // 2) 저장은 누른 순서대로 하나씩
+    .then(() => run('app_setCheck', S.courseId, S.workId, subId, cid, met))
+    .then(v => { if (CHK.pending === 1) updateStudent(v); },      //    마지막 저장이면 서버 값으로 맞춤
+      e => {                                                       // 3) 실패하면 되돌리고 이유를 알림
+        const cur = S.students[subId];
+        if (cur) { if (cur.checks[cid]) cur.checks[cid].met = prev; recomputeStudent(cur); if (S.sel === subId) rerenderKeepScroll(); else renderList(); }
+        showSaveMsg('저장 실패 — 되돌렸습니다: ' + e.message, 'bad'); fail(e);
+      })
+    .then(() => { CHK.pending--; if (CHK.pending === 0 && S.saveCls !== 'bad') showSaveMsg('✔ 저장됨 ' + stamp(), 'ok'); });
 }
 
 /* ---------- 채점 실행 ---------- */

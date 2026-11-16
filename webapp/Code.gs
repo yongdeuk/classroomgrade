@@ -359,8 +359,13 @@ function app_setCheck(courseId, workId, subId, checkId, met) {
   assertAccess_();
   return updateProject_(courseId, workId, p => {
     const r = p.results[subId];
-    if (!r || !r.checks || !r.checks[checkId]) throw new Error('채점 결과를 찾을 수 없습니다.');
-    r.checks[checkId].met = !!met;
+    if (!r || !r.gradedAt) throw new Error('이 학생은 아직 채점하지 않았습니다. 먼저 채점한 뒤 체크를 바꿀 수 있습니다.');
+    const known = Object.keys(p.checklist || {}).some(no => (p.checklist[no] || []).some(c => c.id === checkId));
+    if (!known) throw new Error('세부항목을 찾을 수 없습니다. 루브릭을 고친 뒤라면 화면을 새로고침해 주세요.');
+    r.checks = r.checks || {};
+    // 세부항목을 다시 만든 뒤에는 이전 채점 결과에 없는 번호가 있을 수 있으므로 새로 만든다
+    const cur = r.checks[checkId] || (r.checks[checkId] = { met: false, ai: false, reason: '' });
+    cur.met = !!met;
     r.edited = true;
     return studentView_(p, subId, { sid: r.sid, name: r.name });
   });
