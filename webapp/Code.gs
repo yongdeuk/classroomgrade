@@ -571,6 +571,27 @@ function app_saveRubric(courseId, workId, rubric, checklist, checkUnit) {
   });
 }
 
+/**
+ * 평가항목 하나(아직 저장하지 않은 편집 중인 항목)의 세부항목만 AI로 만든다.
+ * 개수 = ceil(배점 ÷ 단위). 항목 번호는 클라이언트가 다시 붙인다.
+ */
+function app_genItemChecklist(courseId, workId, item, unit) {
+  assertAccess_();
+  const pts = Number(item && item.points);
+  if (!(pts > 0)) throw new Error('배점을 먼저 입력해 주세요.');
+  if (!String(item.name || '').trim() && !String(item.criteria || '').trim()) throw new Error('평가항목 이름이나 채점 기준을 먼저 입력해 주세요.');
+  const p = loadProject_(courseId, workId);
+  const it = {
+    no: '1', name: String(item.name || '평가항목').trim(), points: pts, criteria: String(item.criteria || ''),
+    model: String(item.model || ''), evidence: (item.evidence || []).filter(t => EVIDENCE_TYPES.includes(t)),
+  };
+  // 이미지 읽기 여부는 수행평가 전체 설정을 따른다
+  const tmp = Object.assign({}, p, { rubric: [it], checklist: {}, imageMode: useImages_(p) ? 'on' : 'off' });
+  const u = Number(unit) > 0 ? Number(unit) : (p.checkUnit || p.unit || 5);
+  const cl = generateChecklist_(tmp, u);
+  return (cl['1'] || []).map(c => ({ label: c.label, desc: c.desc, points: c.points }));
+}
+
 function app_regenChecklist(courseId, workId, checkUnit) {
   assertAccess_();
   if (!loadProject_(courseId, workId).rubric.length) throw new Error('먼저 1. 평가 루브릭에서 파일을 골라 등록해 주세요.');

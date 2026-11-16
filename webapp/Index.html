@@ -333,13 +333,14 @@ const BUSY_MAP = {
   app_uploadExample: ['예시답안을 읽는 중', '파일 크기에 따라 10~30초 걸립니다', 20],
   app_uploadWorksheet: ['빈 활동지를 읽는 중', '파일 크기에 따라 10~30초 걸립니다', 20],
   app_saveRubric: ['루브릭·세부항목을 저장하는 중', '보통 몇 초 걸립니다', 6],
+  app_genItemChecklist: ['세부항목을 만드는 중', '보통 20~40초 걸립니다', 30],
   app_export: ['시트로 내보내는 중', '보통 10초 안팎입니다', 12],
   app_push: ['클래스룸에 점수를 넣는 중', '학생 수에 따라 10~40초 걸립니다', 25],
   app_postComments: ['피드백 댓글을 다는 중', '학생 수에 따라 10~40초 걸립니다', 25],
 };
 
 // 서버 호출: 응답이 너무 오래 없으면(6분) 멈춘 채로 두지 않고 오류로 알림
-const SLOW = { app_gradeOne: 1, app_uploadRubric: 1, app_regenChecklist: 1, app_test: 1, app_export: 1, app_uploadExample: 1 };
+const SLOW = { app_genItemChecklist: 1, app_gradeOne: 1, app_uploadRubric: 1, app_regenChecklist: 1, app_test: 1, app_export: 1, app_uploadExample: 1 };
 const run = (fn, ...args) => new Promise((res, rej) => {
   let done = false;
   const bm = BUSY_MAP[fn];
@@ -816,33 +817,47 @@ function renderRubricEditor() {
   markDirty(false);
   drawEditor();
 }
+const editUnit = () => Number($('ckUnit').value) || (S.project && (S.project.checkUnit || S.project.unit)) || 5;
+const needCount = q => Math.max(1, Math.ceil(Number(q.points) / editUnit() - 1e-9));
+
 function drawEditor() {
   const has = ED.rubric.length > 0;
   $('ckRegen').disabled = !has; $('rbSave').disabled = !has;
-  if (!has) { $('rubricEd').innerHTML = '위 <b>1. 평가 루브릭</b>에서 파일을 고르고 <b>[루브릭 불러오기]</b>를 누르면 여기에 항목과 세부항목이 나타납니다.'; return; }
+  const addBtn = '<div class="row" style="margin-top:6px"><button id="addItem">＋ 평가항목 추가</button><span class="small muted">이름·배점·채점 기준을 쓰고 🪄 세부항목 자동 생성을 누르면 배점에 맞는 개수로 만들어집니다.</span></div>';
+  if (!has) { $('rubricEd').innerHTML = '위 <b>1. 평가 루브릭</b>에서 파일을 고르면 항목과 세부항목이 자동으로 나타납니다. 직접 만들려면 아래 버튼을 누르세요.' + addBtn; bindAddItem(); return; }
   $('rubricEd').innerHTML = ED.rubric.map((q, qi) => {
     const cks = ED.checklist[q.no] || [];
     const sum = cks.reduce((a, c) => a + Number(c.points || 0), 0);
     const ev = ['그래프', '코드', '실행결과'].map(t => `<label class="small"><input type="checkbox" data-ev="${qi}" value="${t}" ${(q.evidence || []).includes(t) ? 'checked' : ''}> ${t}</label>`).join(' ');
-    return `<div class="sec" style="margin:8px 0">
+    return `<div class="sec" style="margin:8px 0" id="item${qi}">
       <div class="row"><b>${esc(q.no)}.</b><input type="text" data-q="${qi}" data-f="name" value="${esc(q.name)}" style="flex:1">
         배점 <input type="number" data-q="${qi}" data-f="points" value="${esc(q.points)}" style="width:80px">
-        <span class="small muted">평가 이미지:</span> ${ev}</div>
-      <details style="margin:6px 0"><summary class="small muted">채점 기준(루브릭 원문) 보기·수정</summary>
+        <span class="small muted">평가 이미지:</span> ${ev}
+        <button class="ghost" data-delq="${qi}" title="이 평가항목 삭제">🗑</button></div>
+      <details style="margin:6px 0" ${q._crit || !String(q.criteria || '').trim() ? 'open' : ''}><summary class="small muted">채점 기준(루브릭 원문) 보기·수정</summary>
         <textarea data-q="${qi}" data-f="criteria" rows="4">${esc(q.criteria)}</textarea></details>
-      <table class="ed"><tr><th style="width:52px">번호</th><th style="width:150px">짧은 이름</th><th>체크 기준</th><th style="width:80px">점수</th><th style="width:30px"></th></tr>
+      ${cks.length ? `<table class="ed"><tr><th style="width:52px">번호</th><th style="width:150px">짧은 이름</th><th>체크 기준</th><th style="width:80px">점수</th><th style="width:30px"></th></tr>
         ${cks.map((c, ci) => `<tr><td>${esc(q.no)}-${ci + 1}</td>
           <td><input type="text" data-c="${esc(q.no)}" data-i="${ci}" data-f="label" value="${esc(c.label)}"></td>
           <td><input type="text" data-c="${esc(q.no)}" data-i="${ci}" data-f="desc" value="${esc(c.desc)}"></td>
           <td><input type="number" data-c="${esc(q.no)}" data-i="${ci}" data-f="points" value="${esc(c.points)}"></td>
           <td><button class="ghost" data-del="${esc(q.no)}" data-i="${ci}" title="삭제">✕</button></td></tr>`).join('')}
-      </table>
+      </table>` : '<div class="small muted" style="padding:6px 0">세부항목이 없습니다. 🪄 세부항목 자동 생성을 누르거나 ＋ 세부항목 추가로 직접 만드세요.</div>'}
       <div class="row small" style="margin-top:4px"><button class="ghost" data-add="${esc(q.no)}">＋ 세부항목 추가</button>
+        <button class="ghost" data-gen="${qi}" title="배점 ÷ 세부항목 1개당 점수 = 개수">🪄 세부항목 자동 생성 (${needCount(q)}개)</button>
+        <span class="small" id="hint${qi}" style="color:var(--warn);${q._crit ? '' : 'display:none'}">⚠ 채점 기준을 고쳤어요. 새 기준에 맞추려면 자동 생성을 누르세요.</span>
         <span class="spacer"></span><span class="sum ${sum !== Number(q.points) ? 'bad' : ''}">세부항목 합 ${sum} / 배점 ${esc(q.points)}</span></div>
     </div>`;
-  }).join('');
+  }).join('') + addBtn;
   const box = $('rubricEd');
-  box.querySelectorAll('[data-q]').forEach(el => el.oninput = () => { const q = ED.rubric[el.dataset.q]; q[el.dataset.f] = el.dataset.f === 'points' ? Number(el.value) : el.value; markDirty(true); if (el.dataset.f === 'points') drawEditorSums(); });
+  box.querySelectorAll('[data-q]').forEach(el => {
+    el.oninput = () => {
+      const q = ED.rubric[el.dataset.q]; q[el.dataset.f] = el.dataset.f === 'points' ? Number(el.value) : el.value; markDirty(true);
+      if (el.dataset.f === 'points') drawEditorSums();
+      if (el.dataset.f === 'criteria') { q._crit = true; const h = $('hint' + el.dataset.q); if (h) h.style.display = ''; }
+    };
+    if (el.dataset.f === 'points') el.onchange = () => onPointsChanged(Number(el.dataset.q));
+  });
   box.querySelectorAll('[data-ev]').forEach(el => el.onchange = () => {
     const q = ED.rubric[el.dataset.ev]; q.evidence = q.evidence || [];
     if (el.checked) q.evidence.push(el.value); else q.evidence = q.evidence.filter(t => t !== el.value);
@@ -853,7 +868,53 @@ function drawEditor() {
     if (el.dataset.f === 'points') drawEditorSums();
   });
   box.querySelectorAll('[data-del]').forEach(el => el.onclick = () => { ED.checklist[el.dataset.del].splice(el.dataset.i, 1); markDirty(true); drawEditor(); });
-  box.querySelectorAll('[data-add]').forEach(el => el.onclick = () => { (ED.checklist[el.dataset.add] = ED.checklist[el.dataset.add] || []).push({ label: '', desc: '', points: S.project.checkUnit || S.project.unit || 5 }); markDirty(true); drawEditor(); });
+  box.querySelectorAll('[data-add]').forEach(el => el.onclick = () => { (ED.checklist[el.dataset.add] = ED.checklist[el.dataset.add] || []).push({ label: '', desc: '', points: editUnit() }); markDirty(true); drawEditor(); });
+  box.querySelectorAll('[data-gen]').forEach(el => el.onclick = () => genItem(Number(el.dataset.gen), false));
+  box.querySelectorAll('[data-delq]').forEach(el => el.onclick = () => removeItem(Number(el.dataset.delq)));
+  bindAddItem();
+}
+
+function bindAddItem() {
+  const b = $('addItem'); if (!b) return;
+  b.onclick = () => {
+    const no = String(ED.rubric.length + 1);
+    ED.rubric.push({ no, name: '새 평가항목', points: editUnit() * 2, criteria: '', model: '', evidence: [] });
+    ED.checklist[no] = [];
+    markDirty(true); drawEditor();
+    const el = $('item' + (ED.rubric.length - 1)); if (el) { el.scrollIntoView({ block: 'center' }); el.querySelector('[data-f="name"]').select(); }
+    toast('이름·배점·채점 기준을 쓴 뒤 🪄 세부항목 자동 생성을 누르세요.', 6000);
+  };
+}
+
+/** 이 평가항목의 세부항목을 AI가 "배점 ÷ 1개당 점수" 개수로 새로 만든다 */
+function genItem(qi, skipConfirm) {
+  const q = ED.rubric[qi];
+  if (!(Number(q.points) > 0)) return toast('배점을 먼저 입력해 주세요.');
+  const unit = editUnit(), need = needCount(q), had = (ED.checklist[q.no] || []).length;
+  if (!skipConfirm && had && !confirm(`${q.no}번 "${q.name}"의 세부항목 ${had}개를 지우고, 배점 ${q.points}점 ÷ ${unit}점 = ${need}개로 AI가 새로 만듭니다. 진행할까요?`)) return;
+  run('app_genItemChecklist', S.courseId, S.workId, q, unit).then(list => {
+    ED.checklist[q.no] = list; q._crit = false; markDirty(true); drawEditor();
+    toast(`${q.no}번 세부항목 ${list.length}개를 만들었습니다. 확인한 뒤 [수정 내용 저장]을 누르세요.`, 6000);
+  }).catch(fail);
+}
+
+/** 배점을 바꾸면 세부항목 개수도 맞출지 묻는다 */
+function onPointsChanged(qi) {
+  const q = ED.rubric[qi]; drawEditorSums();
+  const unit = editUnit(), need = needCount(q), cur = (ED.checklist[q.no] || []).length;
+  if (!(Number(q.points) > 0) || need === cur) { drawEditor(); return; }
+  if (confirm(`배점이 ${q.points}점으로 바뀌어 세부항목은 ${need}개(${unit}점씩)가 되어야 합니다. 지금은 ${cur}개입니다.\nAI가 ${need}개로 다시 만들까요? (취소하면 직접 고칠 수 있습니다)`)) genItem(qi, true);
+  else drawEditor();
+}
+
+/** 평가항목 삭제 후 번호를 다시 붙인다 (세부항목도 함께 이동) */
+function removeItem(qi) {
+  const q = ED.rubric[qi];
+  if (!confirm(`${q.no}번 "${q.name}" 평가항목과 그 세부항목을 삭제할까요?`)) return;
+  const cl = {};
+  const next = ED.rubric.filter((_, i) => i !== qi);
+  next.forEach((it, i) => { const oldNo = it.no, newNo = String(i + 1); cl[newNo] = ED.checklist[oldNo] || []; it.no = newNo; });
+  ED.rubric = next; ED.checklist = cl; markDirty(true); drawEditor();
 }
 function drawEditorSums() {
   const sums = $('rubricEd').querySelectorAll('.sum');
@@ -866,14 +927,17 @@ $('rbSave').onclick = () => {
   if (!ED || !ED.rubric.length) return;
   const bad = ED.rubric.filter(q => (ED.checklist[q.no] || []).reduce((a, c) => a + Number(c.points || 0), 0) !== Number(q.points));
   if (bad.length && !confirm(`${bad.map(q => q.no + '번').join(', ')} 항목의 세부항목 합이 배점과 다릅니다. 그래도 저장할까요? (항목 점수는 배점을 넘지 않습니다)`)) return;
+  const empty = ED.rubric.some(q => (ED.checklist[q.no] || []).some(c => !String(c.label || '').trim() && !String(c.desc || '').trim()));
+  if (empty && !confirm('이름과 체크 기준이 모두 비어 있는 세부항목이 있습니다. AI가 판단할 수 없으니 채워 주세요. 그래도 저장할까요?')) return;
   $('rbSave').disabled = true; setSt('rbSt', '저장하는 중…');
   run('app_saveRubric', S.courseId, S.workId, ED.rubric, ED.checklist, Number($('ckUnit').value) || 0).then(p => {
-    S.project = p; $('rbSave').disabled = false; renderMaterials(); renderRubricEditor();
-    setSt('rbSt', `✅ 저장됨 (${stamp()})`, 'ok');
+    S.project = p; ED.dirty = false; $('rbSave').disabled = false;
+    $('mRubric').classList.remove('open');          // 저장하면 창을 닫고 바로 적용
+    toast('✅ 루브릭·세부항목을 저장하고 적용했습니다.', 5000);
     return refreshWork();
   }).then(() => {
     const out = S.order.filter(id => S.students[id].outdated).length;
-    if (out) toast(`세부항목이 바뀌어 ${out}명은 다시 채점해야 점수가 맞습니다. (▶ 채점 시작)`, 8000);
+    if (out) toast(`세부항목이 바뀌어 ${out}명은 다시 채점해야 점수가 맞습니다. (▶ 채점 시작)`, 9000);
   }).catch(e => { $('rbSave').disabled = false; setSt('rbSt', '저장 실패: ' + e.message, 'bad'); fail(e); });
 };
 $('ckRegen').onclick = () => {
