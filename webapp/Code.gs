@@ -77,7 +77,7 @@ function loadProject_(courseId, workId) {
   return {
     courseId, workId, title: '', context: '', unit: 0,
     rubric: [], checklist: {}, worksheet: { text: '', name: '' }, example: { text: '', name: '', ref: '' },
-    results: {}, imageMode: 'auto',
+    results: {}, imageMode: 'auto', minScore: 0, applyMin: false,
   };
 }
 
@@ -226,6 +226,8 @@ function projectView_(p) {
   return {
     context: p.context, unit: p.unit, rubric: p.rubric, checklist: p.checklist, total,
     imageMode: p.imageMode || 'auto', readImages: useImages_(p), checkUnit: p.checkUnit || p.unit || 5,
+    minScore: Number(p.minScore) || 0, applyMin: !!p.applyMin,
+    minScoreHint: detectMinScore_(p.worksheet && p.worksheet.text) || detectMinScore_((p.rubric || []).map(q => q.criteria).join('\n')),
     worksheet: { name: p.worksheet.name, chars: p.worksheet.text.length },
     example: { name: p.example.name, chars: p.example.text.length, images: (p.example.text.match(/\[예시 이미지 \d+\]/g) || []).length },
   };
@@ -281,7 +283,30 @@ function computeScore_(p, r) {
     total += score;
     items.push({ no: q.no, name: q.name, points: q.points, score });
   });
-  return { total, items, deductions };
+  // 최소점(기본점수): 켜져 있으면 원점수가 최소점보다 낮을 때 최소점으로 올려서 보여 주고 반영한다
+  const full = p.rubric.reduce((a, q) => a + q.points, 0);
+  const floor = Math.min(Number(p.minScore) || 0, full);
+  const applied = !!p.applyMin && floor > 0 && total < floor;
+  return { total: applied ? floor : total, raw: total, minApplied: applied, items, deductions };
+}
+
+/** 활동지·루브릭 글에서 "기본점수 40점" 같은 표기를 찾아 최소점 후보로 알려 준다 */
+function detectMinScore_(text) {
+  const m = String(text || '').match(/(?:기본\s*점수|최소\s*점수|최저\s*점수|최소점)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*점?/);
+  return m ? Number(m[1]) : 0;
+}
+
+/** 최소점(기본점수)과 적용 여부 저장. 점수는 보여 주는 값만 달라지므로 다시 채점할 필요가 없습니다 */
+function app_saveMinScore(courseId, workId, minScore, applyMin) {
+  assertAccess_();
+  const m = Number(minScore) || 0;
+  if (m < 0) throw new Error('최소점은 0 이상이어야 합니다.');
+  return updateProject_(courseId, workId, p => {
+    const full = p.rubric.reduce((a, q) => a + q.points, 0);
+    if (m > full) throw new Error(`최소점은 루브릭 합계(${full}점)보다 클 수 없습니다.`);
+    p.minScore = m; p.applyMin = !!applyMin && m > 0;
+    return projectView_(p);
+  });
 }
 
 // ===================== 채점 =====================
@@ -487,7 +512,7 @@ function app_export(courseId, workId) {
   p.rubric.forEach(q => (p.checklist[q.no] || []).forEach(c => checksAll.push(c)));
   const header = ['학번', '학생이름', '최종점수', '감점 사유'].concat(
     ...p.rubric.map(q => [`${q.no}. ${q.name} 점수`].concat((p.checklist[q.no] || []).map(c => `${c.id} ${c.label} (${c.points})`))),
-    ['종합피드백', '검토 필요', '채점 상태']);
+    ['종합피드백', '검토 필요', '채점 상태', '원점수', '최소점 적용']);
   const rows = Object.values(p.results).filter(r => r.gradedAt).map(r => {
     const c = computeScore_(p, r);
     const row = [r.sid || '', r.name || '', c.total, c.deductions.map(d => `${d.id} ${d.label} -${d.points}`).join(' / ') || '감점 없음'];
@@ -495,7 +520,7 @@ function app_export(courseId, workId) {
       row.push(c.items.find(i => i.no === q.no).score);
       (p.checklist[q.no] || []).forEach(ck => row.push(r.checks && r.checks[ck.id] && r.checks[ck.id].met ? '✔' : '✘'));
     });
-    row.push(r.feedback || '', r.review || '', r.outdated ? '다시 채점 필요' : (r.confirmed ? '채점 완료(AI+교사 확인)' : 'AI 채점만'));
+    row.push(r.feedback || '', r.review || '', r.outdated ? '다시 채점 필요' : (r.confirmed ? '채점 완료(AI+교사 확인)' : 'AI 채점만'), c.raw, c.minApplied ? '적용' : '');
     return row;
   }).sort((a, b) => {
     const ka = String(a[0] || '\uffff'), kb = String(b[0] || '\uffff');

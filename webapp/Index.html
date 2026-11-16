@@ -200,7 +200,7 @@
     <div class="tools">
       <input type="text" id="search" placeholder="학번·이름 검색">
       <div class="stats" id="stats"></div>
-      <select id="filt" title="상태별로 걸러 보기"><option value="">전체 학생</option><option value="todo">미채점</option><option value="ai">AI 채점됨 · 교사 확인 전</option><option value="done">✔ 채점 완료</option><option value="review">검토 필요</option><option value="outdated">다시 채점 필요</option></select>
+      <select id="filt" title="상태별로 걸러 보기"><option value="">전체 학생</option><option value="todo">미채점</option><option value="ai">AI 채점됨 · 교사 확인 전</option><option value="done">✔ 채점 완료</option><option value="review">검토 필요</option><option value="outdated">다시 채점 필요</option><option value="belowmin">최소점 미만</option></select>
       <div class="bulk"><label><input type="checkbox" id="selAll"> 전체 선택</label><span class="small muted" id="selCount"></span></div>
       <div class="bulkact" id="bulkAct"><button id="bConfirm" title="AI 채점과 교사 확인을 마친 학생을 채점 완료로 표시">✔ 선택 학생 채점 완료</button><button id="bUnconfirm">☐ 완료 해제</button><button id="bRegrade">↻ 선택 학생 다시 채점</button><button id="bPush">⬆ 선택 학생 반영</button></div>
     </div>
@@ -251,6 +251,15 @@
     <label class="imgopt"><input type="radio" name="imgMode" value="on"> <b>항상 읽기</b> <span class="small muted">— 그래프·코드·실행결과 캡처를 평가에 사용</span></label>
     <label class="imgopt"><input type="radio" name="imgMode" value="off"> <b>읽지 않기</b> <span class="small muted">— 글만 평가 (이미지가 없어도 감점·검토 표시 없음)</span></label>
     <div class="st" id="imgSt"></div>
+  </div>
+  <div class="sec">
+    <h4>🎯 최소점(기본점수) <span class="opt">이 점수보다 낮은 학생은 최소점으로 올려서 보여 주고 클래스룸에 반영합니다</span></h4>
+    <div class="row">
+      <label>최소점 <input type="number" id="minScore" min="0" step="1" style="width:80px"> 점 <span class="small muted">(루브릭 합계 <b id="minTot">-</b>점 기준)</span></label>
+      <label class="imgopt" style="display:inline"><input type="checkbox" id="applyMin"> <b>최소점 적용</b></label>
+      <button id="minUseHint" style="display:none"></button>
+    </div>
+    <div class="st" id="minSt"></div>
   </div>
   <div class="sec">
     <h4>과제 설명 <span class="opt">선택 · AI에게 맥락으로 전달 (예: 중2 정보 - 정렬 알고리즘 탐구)</span></h4>
@@ -489,6 +498,7 @@ function openWork() {
 /* ---------- 학생 목록 ---------- */
 $('search').oninput = renderList;
 /** 검색어와 상태 필터를 적용한 보이는 학생 목록 */
+const minBelow = s => !!(S.project && S.project.minScore > 0 && s.graded && Number(s.raw) < S.project.minScore);
 function visibleList() {
   const q = $('search').value.trim(), f = $('filt').value;
   return S.order.map(id => S.students[id]).filter(s => {
@@ -498,6 +508,7 @@ function visibleList() {
     if (f === 'done') return !!s.confirmed;
     if (f === 'review') return s.graded && !!s.review;
     if (f === 'outdated') return !!s.outdated;
+    if (f === 'belowmin') return s.graded && minBelow(s);
     return true;
   });
 }
@@ -522,6 +533,8 @@ function renderList() {
     if (s.outdated) badges.push('<span class="badge warn" title="세부항목이 바뀌어 다시 채점해야 점수가 맞습니다">다시 채점 필요</span>');
     if (s.pushed && s.pushed.startsWith('✅')) badges.push('<span class="badge ok">반영됨</span>');
     if (s.deductions && s.deductions.length) badges.push(`<span class="badge">감점 ${s.deductions.length}</span>`);
+    if (s.minApplied) badges.push(`<span class="badge warn" title="원점수 ${esc(s.raw)}점이 최소점보다 낮아 최소점으로 올렸습니다">최소점 적용 (원점수 ${esc(s.raw)})</span>`);
+    else if (minBelow(s)) badges.push(`<span class="badge bad" title="최소점보다 낮습니다. 📋 루브릭·자료 › 최소점에서 '최소점 적용'을 켜면 올라갑니다">최소점 미만</span>`);
     return `<div class="stu ${s.subId === S.sel ? 'sel' : ''} ${s.review ? 'review' : ''} ${s.confirmed ? 'done' : ''}" data-id="${esc(s.subId)}">
       <input type="checkbox" class="pick" data-pick="${esc(s.subId)}" ${S.checked.has(s.subId) ? 'checked' : ''} title="선택">
       <div><div class="nm"><span class="sid">${esc(s.sid || '')}</span>${esc(s.name)}</div><div class="sub">${badges.join('')}</div></div>
@@ -636,6 +649,7 @@ function renderDetail() {
         <input type="text" class="sidin" id="sidIn" value="${esc(s.sid)}" title="학번(직접 수정 가능)">
         <div class="who">${esc(s.name)}</div>
         <div class="total">${esc(s.total)}<small> / ${esc(p.total)}</small></div>
+        ${s.minApplied ? `<span class="badge warn" title="원점수가 최소점보다 낮아 최소점으로 올려서 반영합니다">원점수 ${esc(s.raw)} → 최소점 ${esc(p.minScore)} 적용</span>` : (minBelow(s) ? `<span class="badge bad" title="📋 루브릭·자료 › 최소점 › 최소점 적용을 켜면 올라갑니다">⚠ 최소점(${esc(p.minScore)}) 미만 · 원점수 ${esc(s.raw)}</span>` : '')}
         <label class="confirm ${s.confirmed ? 'on' : ''}" title="AI 채점 결과를 교사가 확인했으면 체크하세요. 목록에 '채점 완료'로 표시됩니다."><input type="checkbox" id="confirmBox" ${s.confirmed ? 'checked' : ''} ${s.outdated ? 'disabled' : ''}> 채점 완료<span class="small" style="font-weight:400">(AI + 교사 확인)</span></label>
         <span class="spacer"></span>
         <span class="small" id="saveMsg"></span>
@@ -702,7 +716,9 @@ function recomputeStudent(s) {
     } else { const o = (s.items || []).find(i => i.no === q.no); sc = o ? o.score : 0; }
     total += sc; items.push({ no: q.no, name: q.name, points: q.points, score: sc });
   });
-  s.total = total; s.items = items; s.deductions = deds;
+  const full = p.rubric.reduce((a, q) => a + q.points, 0), floor = Math.min(Number(p.minScore) || 0, full);
+  const applied = !!p.applyMin && floor > 0 && total < floor;
+  s.raw = total; s.minApplied = applied; s.total = applied ? floor : total; s.items = items; s.deductions = deds;
 }
 function toggleConfirm(ids, on) {
   const targets = ids.filter(id => { const s = S.students[id]; return s && s.graded && !(on && s.outdated); });
@@ -827,6 +843,19 @@ $('moreList').querySelectorAll('button').forEach(b => b.onclick = () => {
 $('btnRubric').onclick = openRubric;
 function openRubric() { renderMaterials(); renderRubricEditor(); $('libName').value = $('libName').value || (S.work && S.work.title) || ''; refreshLib(); openModal('mRubric'); }
 
+function renderMinSection() {
+  const p = S.project; if (!p) return;
+  $('minScore').value = p.minScore || ''; $('applyMin').checked = !!p.applyMin; $('minTot').textContent = p.total;
+  const hint = p.minScoreHint;
+  const hb = $('minUseHint');
+  if (hint > 0 && hint !== p.minScore) { hb.style.display = ''; hb.textContent = `활동지의 '기본점수 ${hint}점' 사용`; hb.onclick = () => { $('minScore').value = hint; saveMin('min'); }; }
+  else hb.style.display = 'none';
+  const below = S.order.map(id => S.students[id]).filter(minBelow).length;
+  setSt('minSt', p.minScore > 0
+    ? (p.applyMin ? `✅ 최소점 ${p.minScore}점 적용 중 — 원점수가 더 낮은 ${below}명이 ${p.minScore}점으로 올려져 있습니다. (원점수는 학생 화면에 함께 표시됩니다)`
+                  : `최소점 ${p.minScore}점 (적용 안 함) — 이보다 낮은 학생이 ${below}명 있습니다. [최소점 적용]을 켜면 ${p.minScore}점으로 올려서 반영됩니다.`)
+    : '최소점이 없습니다. 최소점(기본점수)을 쓰고 [최소점 적용]을 켜면, 그보다 낮은 학생이 최소점으로 반영됩니다.', p.applyMin ? 'ok' : '');
+}
 function renderMaterials() {
   const p = S.project;
   setSt('rSt', p.rubric.length ? `현재 루브릭: ${p.rubric.length}개 항목, 합계 ${p.total}점` : '아직 루브릭이 없습니다.');
@@ -841,6 +870,7 @@ function renderMaterials() {
   updateImgBadge();
   $('unitTxt').textContent = p.unit ? p.unit + '점' : '-';
   $('ckUnit').value = p.checkUnit || p.unit || 5;
+  renderMinSection();
 }
 
 /* ---------- 파일을 고르면 자동 등록 ---------- */
@@ -993,6 +1023,20 @@ $('libFile').onchange = () => {
   r.onerror = () => setSt('libSt', '파일을 읽지 못했습니다.', 'bad');
   r.readAsText(f);
 };
+function saveMin(src) {
+  let m = Number($('minScore').value) || 0, on = $('applyMin').checked;
+  if (!(m > 0)) {
+    if (src === 'apply' && on) { $('applyMin').checked = false; return setSt('minSt', '최소점을 먼저 입력해 주세요.', 'bad'); }   // 적용을 켜려는데 최소점이 없음
+    m = 0; on = false; $('applyMin').checked = false;                                                                     // 최소점 칸을 지움 = 최소점 없애기
+  }
+  setSt('minSt', '저장하는 중…');
+  run('app_saveMinScore', S.courseId, S.workId, m, on).then(p => {
+    S.project = p; return refreshWork();
+  }).then(() => { renderMinSection(); if (S.sel) renderDetail(); toast(on ? `최소점 ${m}점을 적용했습니다.` : '최소점 적용을 껐습니다.', 4000); })
+    .catch(e => { renderMinSection(); setSt('minSt', '저장 실패: ' + e.message, 'bad'); });
+}
+$('minScore').onchange = () => saveMin('min');
+$('applyMin').onchange = () => saveMin('apply');
 $('ctxSave').onclick = () => run('app_saveContext', S.courseId, S.workId, $('ctx').value).then(p => { S.project = p; toast('저장했습니다.'); }).catch(fail);
 
 /* 루브릭·세부항목 편집기 */
