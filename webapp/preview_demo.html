@@ -831,7 +831,7 @@ async function autoRubric() {
     S.project = r.project; $('rf').value = ''; $('rt').value = ''; lockInputs(ids, false);
     renderMaterials(); renderRubricEditor();
     const nChecks = Object.values(r.project.checklist).reduce((a, l) => a + l.length, 0);
-    setSt('rSt', `✅ 자동 등록됨 (${stamp()}) — ${r.project.rubric.length}개 항목, 합계 ${r.project.total}점, 세부항목 ${nChecks}개(1개당 ${r.project.checkUnit}점)` + (r.notes ? '\n⚠️ 확인: ' + r.notes : '') + '\n아래에서 세부항목을 확인·수정하세요.', 'ok');
+    setSt('rSt', `✅ 자동 등록됨 (${stamp()}) — ${r.project.rubric.length}개 항목, 합계 ${r.project.total}점, 세부항목 ${nChecks}개(1개당 ${r.project.checkUnit}점)` + (r.notes ? '\n⚠️ 확인: ' + r.notes : '') + (r.genWarn && r.genWarn.length ? '\n⚠️ ' + r.genWarn.join('\n⚠️ ') + '\n비어 있는 세부항목은 직접 쓰거나 🪄 자동 생성을 다시 눌러 주세요.' : '') + '\n아래에서 세부항목을 확인·수정하세요.', r.genWarn && r.genWarn.length ? 'bad' : 'ok');
     refreshWork().catch(() => {});
   } catch (e) { lockInputs(ids, false); setSt('rSt', '오류: ' + e.message, 'bad'); }
 }
@@ -1029,7 +1029,7 @@ $('rbSave').onclick = () => {
 $('ckRegen').onclick = () => {
   if (!confirm('지금 루브릭으로 세부항목을 AI가 다시 만듭니다. 직접 고친 세부항목은 사라집니다. 진행할까요?')) return;
   $('ckRegen').disabled = true; 
-  run('app_regenChecklist', S.courseId, S.workId, Number($('ckUnit').value) || 0).then(p => { S.project = p; $('ckRegen').disabled = false; renderMaterials(); renderRubricEditor(); setSt('rbSt', `✅ 세부항목을 다시 만들었습니다 (${stamp()}) — 1개당 ${p.checkUnit}점`, 'ok'); return refreshWork(); })
+  run('app_regenChecklist', S.courseId, S.workId, Number($('ckUnit').value) || 0).then(p => { S.project = p; $('ckRegen').disabled = false; renderMaterials(); renderRubricEditor(); setSt('rbSt', p.genWarn && p.genWarn.length ? '⚠️ ' + p.genWarn.join(' / ') + ' — 비어 있는 칸은 직접 쓰거나 항목별 🪄 자동 생성을 눌러 주세요.' : `✅ 세부항목을 다시 만들었습니다 (${stamp()}) — 1개당 ${p.checkUnit}점`, p.genWarn && p.genWarn.length ? 'bad' : 'ok'); return refreshWork(); })
     .catch(e => { $('ckRegen').disabled = false; fail(e); });
 };
 
